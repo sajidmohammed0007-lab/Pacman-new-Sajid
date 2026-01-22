@@ -26,6 +26,8 @@ flicker = False
 turns_allowed = [False, False,False,False]
 direction_command = 0
 moving  = False
+player_speed = 2
+
 
 #Used for sprit sheet logic
 sprite_sheet_image = pygame.image.load('Assets/spritesheet.png').convert_alpha()
@@ -136,7 +138,17 @@ def check_position(centrex, centrey):
 
     return turns
 
-
+def move_player(play_x, play_y):
+    # r, l, u, d
+    if direction == 0 and turns_allowed[0]:
+        play_x += player_speed
+    elif direction == 1 and turns_allowed[1]:
+        play_x -= player_speed
+    if direction == 2 and turns_allowed[2]:
+        play_y -= player_speed
+    elif direction == 3 and turns_allowed[3]:
+        play_y += player_speed
+    return play_x, play_y
 
 
 run = True
@@ -163,7 +175,9 @@ while run:
     centre_x = player_x + 23
     centre_y = player_y +23
     turns_allowed = check_position(centre_x,centre_y)
-    
+
+    #player movement
+    player_x,player_y = move_player(player_x,player_y)
 
 
 
@@ -190,14 +204,18 @@ while run:
                 direction_command = direction
             if event.key == pygame.K_DOWN and direction_command == 3:
                 direction_command = direction
-        direction = direction_command
+
+    for i in range(4):
+        if direction_command == i and turns_allowed[i]:
+            direction = i   
 
 
-
+        # pushes pacman into the map when at borders
         if player_x > WIDTH:
             player_x = -47
         elif player_x < -50:
             player_x = WIDTH - 3
+
     # flips the display which in turn changes the screen to the next frame
     pygame.display.flip()
 pygame.quit()

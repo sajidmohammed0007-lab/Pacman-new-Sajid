@@ -173,8 +173,9 @@ while run:
 
     #Wall colision checker
     centre_x = player_x + 23
-    centre_y = player_y +23
+    centre_y = player_y +24
     turns_allowed = check_position(centre_x,centre_y)
+
 
     #player movement
     player_x,player_y = move_player(player_x,player_y)

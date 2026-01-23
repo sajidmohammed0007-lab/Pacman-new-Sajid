@@ -63,6 +63,66 @@ moving = False
 #Eaten ghosts tracker
 eaten_ghosts = [False, False,False,False]
 
+# Ghost positions
+blinky_x = 56
+blinky_y = 58
+blinky_direction = 0
+inky_x = 440
+inky_y = 388
+inky_direction = 2
+pinky_x = 440
+pinky_y = 438
+pinky_direction = 2
+clyde_x = 440
+clyde_y = 438
+clyde_direction = 2
+
+#set ghost targets to player start position
+targets = [(player_x, player_y),(player_x, player_y),(player_x, player_y),(player_x, player_y)]
+#Ghost states
+blinky_dead = False
+inky_dead = False
+clyde_dead = False
+pinky_dead = False
+blinky_box = False
+inky_box = False
+clyde_box = False
+pinky_box = False
+
+# Ghost sprite loading function
+def load_ghosts(sprite_sheet):
+    ghost_data = {}
+    colors = ["red", "pink", "blue", "yellow", "dark"]
+    for i, color in enumerate(colors):
+        ghost_data[color] = {
+            "up": sprite_sheet.get_image(i, 2, 32, 32, 1.40625, "magenta"),
+            "down": sprite_sheet.get_image(i, 3, 32, 32, 1.40625, "magenta"),
+            "left": sprite_sheet.get_image(i, 4, 32, 32, 1.40625, "magenta"),
+            "right": sprite_sheet.get_image(i, 5, 32, 32, 1.40625, "magenta"),
+        }
+    return ghost_data
+ghost_sprites = load_ghosts(sprite_sheet)
+ghost_spooked =sprite_sheet.get_image(5, 3,32,32,1.40625,"magenta")
+ghost_dead =sprite_sheet.get_image(5, 2,32,32,1.40625,"magenta")
+
+# Ghost class
+class Ghost:
+    def __init__(self, x_coord, y_coord, target, speed, img, direct, dead, box, id):
+        self.x_pos = x_coord
+        self.y_pos = y_coord
+        self.center_x = self.x_pos +22
+        self.center_y = self.y_pos + 22
+        self.target = target
+        self.speed = speed
+        self.in_box = box
+        self.img = img
+        self.direction = direct
+        self.dead = dead
+        self.id = id
+        self.turns, self.in_box = self.check_collisons()
+        self.rect = self.draw()
+
+
 # draw board using different shape orientations
 def draw_boards(level):
     #The heigh of th board and width seperated by the amount of tiles

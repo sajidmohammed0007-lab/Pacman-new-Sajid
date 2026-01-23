@@ -10,8 +10,11 @@ HEIGHT = 950
 screen = pygame.display.set_mode([WIDTH, HEIGHT])
 timer = pygame.time.Clock()
 fps = 60
+
+#Font settings
 font = pygame.font.Font('freesansbold.ttf', 20)
 pygame.display.set_caption('PACMANY')
+big_font = pygame.font.Font('freesansbold.ttf', 50)
 
 
 #Variablees for maze drawing
@@ -55,7 +58,6 @@ powerup = False
 power_counter = 0
 
 #Startup delay variables
-startup_counter = 0
 moving = False
 
 #Eaten ghosts tracker
@@ -185,13 +187,27 @@ def check_collisions(scor, power,power_count,eaten_ghosts):
     return scor, power, power_count, eaten_ghosts
 
 def draw_ui():
+    # Score
     score_text = font.render(f'Score: {score}', True, 'white')
-    screen.blit(score_text,(10, 920))
+    screen.blit(score_text, (10, 920))
+
+    # Power-up indicator
     if powerup:
-        pygame.draw.circle(screen, "blue", (140,930),15)
+        pygame.draw.circle(screen, "blue", (140, 930), 15)
+
+    # Lives display
     for i in range(lives):
-        # REMOVE: player_images[2].set_colorkey(pygame.Color("magenta"))
-        screen.blit(pygame.transform.scale(pacman_right2,(30,30)), (650 + i * 40, 915))    
+        screen.blit(
+            pygame.transform.scale(pacman_right2, (30, 30)),
+            (650 + i * 40, 915)
+        )
+
+    # Start game prompt
+    if not moving:
+        start_text = big_font.render("PRESS P TO START", True, "green")
+        text_rect = start_text.get_rect(center=(WIDTH // 2, HEIGHT // 2))
+        screen.blit(start_text, text_rect)
+   
 
 
 run = True
@@ -236,20 +252,20 @@ while run:
         powerup = False
         eaten_ghosts = [False, False, False,False] #reset eaten ghosts
     
-    #Startup delay manager
-    for event in pygame.event.get():
-        if event.type == pygame.KEYDOWN: 
-            if event.key == pygame.K_p:
-                moving = True
-            else:
-                moving = False
+   
 
 
-
+    # Event manager
     #Managing the exit function 
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
             run = False
+
+        if event.type == pygame.KEYDOWN:
+            if event.key == pygame.K_p:
+                moving = True
+
+        
         # Input and direction manager
         if event.type == pygame.KEYDOWN: 
             if event.key == pygame.K_RIGHT:

@@ -43,6 +43,23 @@ player_y = 663
 direction = 0
 counter = 0
 
+# Variables for scoring
+score = 0
+
+#Draw ui sections
+powerup = False
+lives = 4
+
+#PowerUps
+powerup = False
+power_counter = 0
+
+#Startup delay variables
+startup_counter = 0
+moving = False
+
+#Eaten ghosts tracker
+eaten_ghosts = [False, False,False,False]
 
 # draw board using different shape orientations
 def draw_boards(level):
@@ -150,6 +167,32 @@ def move_player(play_x, play_y):
         play_y += player_speed
     return play_x, play_y
 
+def check_collisions(scor, power,power_count,eaten_ghosts):
+    num1 = (HEIGHT - 50) // 32
+    num2= WIDTH//30
+    # chceks player is within constraints 
+    if 0< player_x < 870:
+        if level[centre_y//num1][centre_x//num2] == 1: #checks position in maze / changes orb value to 0(background)
+            level[centre_y//num1][centre_x//num2] = 0
+            scor += 10  #increments score counter
+        if level[centre_y//num1][centre_x//num2] == 2:
+            level[centre_y//num1][centre_x//num2] = 0
+            scor += 50    # Larger score incremetn for 2(big orbs)
+            power = True
+            power_count = 0
+            eaten_ghosts = [False,False,False,False]
+
+    return scor, power, power_count, eaten_ghosts
+
+def draw_ui():
+    score_text = font.render(f'Score: {score}', True, 'white')
+    screen.blit(score_text,(10, 920))
+    if powerup:
+        pygame.draw.circle(screen, "blue", (140,930),15)
+    for i in range(lives):
+        # REMOVE: player_images[2].set_colorkey(pygame.Color("magenta"))
+        screen.blit(pygame.transform.scale(pacman_right2,(30,30)), (650 + i * 40, 915))    
+
 
 run = True
 while run: 
@@ -158,6 +201,20 @@ while run:
     screen.fill("black")
     draw_boards(level)
     draw_player()
+    draw_ui()
+
+    #Wall colision checker
+    centre_x = player_x + 23
+    centre_y = player_y +24
+    turns_allowed = check_position(centre_x,centre_y)
+
+    #player movement
+    if moving:
+        player_x,player_y = move_player(player_x,player_y)
+
+    #score checker
+    score,powerup, power_counter,eaten_ghosts = check_collisions(score,powerup, power_counter,eaten_ghosts)
+    print("score:", score)
 
     #Managing Pacman animations
     if counter < 19:
@@ -171,14 +228,21 @@ while run:
         flicker_counter = 0
     flicker = flicker_counter<15
 
-    #Wall colision checker
-    centre_x = player_x + 23
-    centre_y = player_y +24
-    turns_allowed = check_position(centre_x,centre_y)
-
-
-    #player movement
-    player_x,player_y = move_player(player_x,player_y)
+    # Power up timer manager
+    if powerup and power_counter < 600: #10 seconds at 60 fps
+        power_counter += 1
+    elif powerup and power_counter >- 600:
+        power_counter = 0
+        powerup = False
+        eaten_ghosts = [False, False, False,False] #reset eaten ghosts
+    
+    #Startup delay manager
+    for event in pygame.event.get():
+        if event.type == pygame.KEYDOWN: 
+            if event.key == pygame.K_p:
+                moving = True
+            else:
+                moving = False
 
 
 
@@ -206,16 +270,21 @@ while run:
             if event.key == pygame.K_DOWN and direction_command == 3:
                 direction_command = direction
 
-    for i in range(4):
-        if direction_command == i and turns_allowed[i]:
-            direction = i   
+    #Joystick style movement condition 
+    if direction_command == 0 and turns_allowed[0]:
+        direction = 0   
+    if direction_command == 1 and turns_allowed[1]:
+        direction = 1 
+    if direction_command == 2 and turns_allowed[2]:
+        direction = 2
+    if direction_command == 3 and turns_allowed[3]:
+        direction = 3
 
-
-        # pushes pacman into the map when at borders
-        if player_x > WIDTH:
-            player_x = -47
-        elif player_x < -50:
-            player_x = WIDTH - 3
+    # pushes pacman into the map when at borders
+    if player_x > WIDTH:
+        player_x = -47
+    elif player_x < -50:
+        player_x = WIDTH - 3
 
     # flips the display which in turn changes the screen to the next frame
     pygame.display.flip()

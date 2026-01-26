@@ -1253,14 +1253,6 @@ while run:
             inky_x, inky_y, inky_direction = inky.move_clyde()
         clyde_x, clyde_y, clyde_direction = clyde.move_clyde()
         
-        if blinky.in_box:
-            blinky_x, blinky_y, blinky_direction = blinky.move_clyde()
-        if inky.in_box:
-            inky_x, inky_y, inky_direction = inky.move_clyde()
-        if pinky.in_box:
-            pinky_x, pinky_y, pinky_direction = pinky.move_clyde()
-        if clyde.in_box:
-            clyde_x, clyde_y, clyde_direction = clyde.move_clyde()
 
 
 

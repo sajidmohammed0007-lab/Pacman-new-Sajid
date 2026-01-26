@@ -31,7 +31,7 @@ direction_command = 0
 moving  = False
 
 #entities speed
-ghost_speed = 2
+ghost_speeds  = [2,2,2,2]
 player_speed = 2
 
 
@@ -119,10 +119,10 @@ def get_ghost_facing_image(color, direction):
 
 def load_dead_ghosts(sprite_sheet):
     return {
-        "up": sprite_sheet.get_image(5, 0, 32, 32, 1.40625, "magenta"),
-        "down": sprite_sheet.get_image(5, 1, 32, 32, 1.40625, "magenta"),
-        "left": sprite_sheet.get_image(5, 2, 32, 32, 1.40625, "magenta"),
-        "right": sprite_sheet.get_image(5, 3, 32, 32, 1.40625, "magenta"),
+        "up": sprite_sheet.get_image(4, 2, 32, 32, 1.40625, "magenta"),
+        "down": sprite_sheet.get_image(4, 3, 32, 32, 1.40625, "magenta"),
+        "left": sprite_sheet.get_image(4, 4, 32, 32, 1.40625, "magenta"),
+        "right": sprite_sheet.get_image(4, 5, 32, 32, 1.40625, "magenta"),
     }
 ghost_dead_sprites = load_dead_ghosts(sprite_sheet)
 
@@ -152,7 +152,8 @@ class Ghost:
         elif powerup and not self.dead and not eaten_ghosts[self.id]:
             screen.blit(ghost_spooked,(self.x_pos,self.y_pos)) 
         else:
-            screen.blit(ghost_dead,(self.x_pos,self.y_pos)) 
+            dir_key = {0: "right", 1: "left", 2: "up", 3: "down"}[self.direction]
+            screen.blit(ghost_dead_sprites[dir_key], (self.x_pos, self.y_pos))
         ghost_rect  = pygame.rect.Rect((self.center_x - 18, self.center_y - 18), (36,36))
         return ghost_rect
     def check_collisons(self):
@@ -252,7 +253,7 @@ class Ghost:
             self.turns[1] = True
 
         # Check whether the ghost is inside the ghost box area
-        if 350 < self.x_pos < 550 and 370 < self.y_pos < 480:
+        if 350 < self.x_pos < 550 and 370 < self.y_pos < 470:
             self.in_box = True
         else:
             self.in_box = False
@@ -609,19 +610,18 @@ def get_targets(blink_x, blink_y, ink_x, ink_y, pink_x, pink_y, clyd_x, clyd_y):
     return_target = (380, 400)
     
     if powerup:
-        if not blinky.dead:
+        if not blinky.dead and not eaten_ghosts[0]:
             blink_target = (runaway_x, runaway_y)
-        elif not blinky.dead:
+        elif not blinky.dead and eaten_ghosts[0]:
             if 340 < blink_x < 560 and 340 < blink_y < 500:
                 blink_target = (400, 100)
             else:
                 blink_target = (player_x, player_y)
         else:
             blink_target = return_target
-
-        if not inky.dead:
+        if not inky.dead and not eaten_ghosts[1]:
             ink_target = (runaway_x, player_y)
-        elif not inky.dead:
+        elif not inky.dead and eaten_ghosts[1]:
             if 340 < ink_x < 560 and 340 < ink_y < 500:
                 ink_target = (400, 100)
             else:
@@ -630,16 +630,16 @@ def get_targets(blink_x, blink_y, ink_x, ink_y, pink_x, pink_y, clyd_x, clyd_y):
             ink_target = return_target
         if not pinky.dead:
             pink_target = (player_x, runaway_y)
-        elif not pinky.dead:
+        elif not pinky.dead and eaten_ghosts[2]:
             if 340 < pink_x < 560 and 340 < pink_y < 500:
                 pink_target = (400, 100)
             else:
                 pink_target = (player_x, player_y)
         else:
             pink_target = return_target
-        if not clyde.dead:
+        if not clyde.dead and not eaten_ghosts[3]:
             clyd_target = (450, 450)
-        elif not clyde.dead:
+        elif not clyde.dead and eaten_ghosts[3]:
             if 340 < clyd_x < 560 and 340 < clyd_y < 500:
                 clyd_target = (400, 100)
             else:
@@ -697,15 +697,36 @@ while run:
     centre_y = player_y +24
     turns_allowed = check_position(centre_x,centre_y)
 
-    
+    if powerup:
+        ghost_speeds = [1, 1, 1, 1]
+    else:
+        ghost_speeds = [2, 2, 2, 2]
+    if eaten_ghosts[0]:
+        ghost_speeds[0] = 2
+    if eaten_ghosts[1]:
+        ghost_speeds[1] = 2
+    if eaten_ghosts[2]:
+        ghost_speeds[2] = 2
+    if eaten_ghosts[3]:
+        ghost_speeds[3] = 2
+    if blinky_dead:
+        ghost_speeds[0] = 4
+    if inky_dead:
+        ghost_speeds[1] = 4
+    if pinky_dead:
+        ghost_speeds[2] = 4
+    if clyde_dead:
+        ghost_speeds[3] = 4
+
+
     player_circle = pygame.draw.circle(screen, "black", (centre_x, centre_y), 20, 2)
     draw_player()
 
     # Ghost drawing section
-    blinky = Ghost(blinky_x, blinky_y, targets[0], ghost_speed,get_ghost_facing_image("red", blinky_direction), blinky_direction, blinky_dead, blinky_box, 0 )
-    inky = Ghost(inky_x, inky_y, targets[1], ghost_speed, get_ghost_facing_image("blue", inky_direction), inky_direction, inky_dead, inky_box, 1 )
-    pinky = Ghost(pinky_x, pinky_y, targets[2], ghost_speed, get_ghost_facing_image("pink", pinky_direction), pinky_direction, pinky_dead, pinky_box, 2 )
-    clyde = Ghost(clyde_x, clyde_y, targets[3], ghost_speed, get_ghost_facing_image("yellow", clyde_direction), clyde_direction, clyde_dead, clyde_box, 3)
+    blinky = Ghost(blinky_x, blinky_y, targets[0], ghost_speeds[0],get_ghost_facing_image("red", blinky_direction), blinky_direction, blinky_dead, blinky_box, 0 )
+    inky = Ghost(inky_x, inky_y, targets[1], ghost_speeds[1], get_ghost_facing_image("blue", inky_direction), inky_direction, inky_dead, inky_box, 1 )
+    pinky = Ghost(pinky_x, pinky_y, targets[2], ghost_speeds[2], get_ghost_facing_image("pink", pinky_direction), pinky_direction, pinky_dead, pinky_box, 2 )
+    clyde = Ghost(clyde_x, clyde_y, targets[3], ghost_speeds[3], get_ghost_facing_image("yellow", clyde_direction), clyde_direction, clyde_dead, clyde_box, 3)
 
     #Ghost.move_clyde(clyde)
     
@@ -732,10 +753,19 @@ while run:
 
     #player movement
     if moving:
-        player_x,player_y = move_player(player_x,player_y)
-        blinky_x, blinky_y, blinky_direction = blinky.move_clyde()
-        inky_x, inky_y, inky_direction = inky.move_clyde() 
-        pinky_x, pinky_y, pinky_direction = pinky.move_clyde()
+        player_x, player_y = move_player(player_x, player_y)
+        if not blinky_dead and not blinky.in_box:
+            blinky_x, blinky_y, blinky_direction = blinky.move_blinky()
+        else:
+            blinky_x, blinky_y, blinky_direction = blinky.move_clyde()
+        if not pinky_dead and not pinky.in_box:
+            pinky_x, pinky_y, pinky_direction = pinky.move_pinky()
+        else:
+            pinky_x, pinky_y, pinky_direction = pinky.move_clyde()
+        if not inky_dead and not inky.in_box:
+            inky_x, inky_y, inky_direction = inky.move_inky()
+        else:
+            inky_x, inky_y, inky_direction = inky.move_clyde()
         clyde_x, clyde_y, clyde_direction = clyde.move_clyde()
 
     #score checker
@@ -803,6 +833,7 @@ while run:
                 inky_dead = False
                 clyde_dead = False
                 pinky_dead = False
+                moving = False
             else:
                 game_over = True
                 moving = False
@@ -963,8 +994,9 @@ while run:
             run = False
 
         if event.type == pygame.KEYDOWN:
-            if event.key == pygame.K_p:
+            if event.key == pygame.K_p and not moving and not game_over and not game_won:
                 moving = True
+
 
         
         # Input and direction manager

@@ -6,6 +6,16 @@ import math
 import spritesheet
 from collections import deque
 #initialising key variables
+pygame.mixer.pre_init(44100, -16, 2, 512)
+pygame.init()
+pygame.mixer.init()
+
+from audio_manager import AudioManager
+audio = AudioManager()
+
+
+
+
 
 pygame.init()
 WIDTH = 900
@@ -25,6 +35,9 @@ MENU_MAIN = "main"
 MENU_DIFFICULTY = "difficulty"
 MENU_CONTROLS = "controls"
 MENU_LEADERBOARD = "leaderboard"
+game_over_sfx_played = False
+win_sfx_played = False
+
 
 cover_active = True           # start with cover menu on
 menu_screen = MENU_MAIN
@@ -299,9 +312,11 @@ def handle_menu_key(event):
 
         if event.key == pygame.K_UP:
             menu_index = (menu_index - 1) % options_count
+            audio.menu_move()
             return True
         if event.key == pygame.K_DOWN:
             menu_index = (menu_index + 1) % options_count
+            audio.menu_move()
             return True
 
         if event.key in (pygame.K_RETURN, pygame.K_KP_ENTER):
@@ -309,17 +324,24 @@ def handle_menu_key(event):
                 apply_difficulty(difficulty_index)
                 cover_active = False
                 moving = True          # start immediately
+                audio.start()
+                cover_active = False
+                moving = True
                 return True
             if menu_index == 1:  # DIFFICULTY
                 menu_screen = MENU_DIFFICULTY
+                audio.menu_select()
                 return True
             if menu_index == 2:  # LEADERBOARD
                 menu_screen = MENU_LEADERBOARD
+                audio.menu_select()
                 return True
             if menu_index == 3:  # CONTROLS
                 menu_screen = MENU_CONTROLS
+                audio.menu_select()
                 return True
             if menu_index == 4:  # QUIT
+                audio.menu_select()
                 run = False
                 return True
 
@@ -330,10 +352,12 @@ def handle_menu_key(event):
         if event.key == pygame.K_LEFT:
             difficulty_index = (difficulty_index - 1) % len(difficulty_names)
             apply_difficulty(difficulty_index)
+            audio.menu_move()
             return True
         if event.key == pygame.K_RIGHT:
             difficulty_index = (difficulty_index + 1) % len(difficulty_names)
             apply_difficulty(difficulty_index)
+            audio.menu_move()
             return True
         if event.key == pygame.K_ESCAPE:
             menu_screen = MENU_MAIN
@@ -343,6 +367,7 @@ def handle_menu_key(event):
     # controls / leaderboard screens
     if menu_screen in (MENU_CONTROLS, MENU_LEADERBOARD):
         if event.key == pygame.K_ESCAPE:
+            audio.menu_back()
             menu_screen = MENU_MAIN
             return True
         return False
@@ -1317,21 +1342,24 @@ def move_player(play_x, play_y):
 def check_collisions(scor, power,power_count,eaten_ghosts):
     num1 = (HEIGHT - 50) // 32
     num2= WIDTH//30
+    ate_pellet = False
+    ate_power = False
     # chceks player is within constraints 
     if 0< player_x < 870:
         if level[centre_y//num1][centre_x//num2] == 1: #checks position in maze / changes orb value to 0(background)
             level[centre_y//num1][centre_x//num2] = 0
             scor += 10  #increments score counter
+            ate_pellet = True
         if level[centre_y//num1][centre_x//num2] == 2:
             level[centre_y//num1][centre_x//num2] = 0
             scor += 50    # Larger score incremetn for 2(big orbs)
             power = True
             power_count = 0
             eaten_ghosts = [False,False,False,False]
-            
+            ate_power = True
 
 
-    return scor, power, power_count, eaten_ghosts
+    return scor, power, power_count, eaten_ghosts, ate_pellet, ate_power
 
 def draw_ui():
     # Score
@@ -1498,6 +1526,15 @@ while run:
     screen.fill("black")
     draw_boards(level)
     
+    if cover_active:
+        audio.play_music("menu")
+    else:
+        audio.play_music("level")
+
+    if game_won and not win_sfx_played:
+            audio.win()
+            win_sfx_played = True
+
     #Wall colision checker
     centre_x = player_x + 23
     centre_y = player_y +24
@@ -1597,8 +1634,14 @@ while run:
    # print("plinky tile:", pix_to_tile(pinky.center_x, pinky.center_y))
 
     #score checker
-    score,powerup, power_counter,eaten_ghosts = check_collisions(score,powerup, power_counter,eaten_ghosts)
+    score,powerup, power_counter,eaten_ghosts,ate_pellet, ate_power = check_collisions(score,powerup, power_counter,eaten_ghosts)
     #print("score:", score)
+
+    if ate_pellet:
+        audio.pellet()
+    if ate_power:
+        audio.power()
+
 
     #Managing Pacman animations
     if counter < 19:
@@ -1641,6 +1684,7 @@ while run:
                 (player_circle.colliderect(clyde.rect) and not clyde.dead):
             if lives > 0:
                 lives -= 1
+                audio.player_die()
                 startup_counter = 0
                 powerup = False
                 power_counter = 0
@@ -1669,6 +1713,9 @@ while run:
             else:
                 game_over = True
                 moving = False
+                if not game_over_sfx_played:
+                    audio.game_over()
+                    game_over_sfx_played = True
                 startup_counter = 0
     if powerup and player_circle.colliderect(blinky.rect) and eaten_ghosts[0] and not blinky.dead:
         if lives > 0:
@@ -1802,18 +1849,26 @@ while run:
         blinky_dead = True
         eaten_ghosts[0] = True
         score += (2 ** eaten_ghosts.count(True)) * 100
+        audio.ghost_eaten()
+
     if powerup and player_circle.colliderect(inky.rect) and not inky.dead and not eaten_ghosts[1]:
         inky_dead = True
         eaten_ghosts[1] = True
         score += (2 ** eaten_ghosts.count(True)) * 100
+        audio.ghost_eaten()
+
     if powerup and player_circle.colliderect(pinky.rect) and not pinky.dead and not eaten_ghosts[2]:
         pinky_dead = True
         eaten_ghosts[2] = True
         score += (2 ** eaten_ghosts.count(True)) * 100
+        audio.ghost_eaten()
+
     if powerup and player_circle.colliderect(clyde.rect) and not clyde.dead and not eaten_ghosts[3]:
         clyde_dead = True
         eaten_ghosts[3] = True
         score += (2 ** eaten_ghosts.count(True)) * 100
+        audio.ghost_eaten()
+
         
     
 
@@ -1857,6 +1912,9 @@ while run:
                 elif game_won:
                     # advance to next level, then show READY screen (not menu)
                     current_level += 1
+                    win_sfx_played = False
+                    gameover_sfx_played = False
+
                     if current_level >= len(LEVELS):
                         current_level = 0  # loop back (or add final victory screen later)
 
@@ -1868,6 +1926,8 @@ while run:
                     moving = False
 
                     reset_entities_for_level()
+
+        
 
 
         

@@ -6,9 +6,6 @@ import math
 import spritesheet
 from collections import deque
 #initialising key variables
-pygame.mixer.pre_init(44100, -16, 2, 512)  # (freq, size, channels, buffer)
-pygame.init()
-pygame.mixer.init()
 
 pygame.init()
 WIDTH = 900
@@ -17,7 +14,7 @@ screen = pygame.display.set_mode([WIDTH, HEIGHT])
 timer = pygame.time.Clock()
 fps = 60
 
-#
+
 LEVELS = [boards,boards]
 current_level = 0
 

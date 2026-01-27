@@ -1,15 +1,35 @@
 # initialising libraries
+import copy
 import pygame
 from board import boards
 import math 
 import spritesheet
+from collections import deque
 #initialising key variables
+pygame.mixer.pre_init(44100, -16, 2, 512)  # (freq, size, channels, buffer)
+pygame.init()
+pygame.mixer.init()
+
 pygame.init()
 WIDTH = 900
 HEIGHT = 950
 screen = pygame.display.set_mode([WIDTH, HEIGHT])
 timer = pygame.time.Clock()
 fps = 60
+
+#
+LEVELS = [boards,boards]
+current_level = 0
+
+
+#Tile size calculations
+TILE_H = (HEIGHT - 50) // 32
+TILE_W = WIDTH // 30
+
+# Pick the tile you want dead ghosts to reach.
+BOX_TARGET_TILE = (16, 15)  # (row, col) 
+
+
 
 #Font settings
 font = pygame.font.Font('freesansbold.ttf', 20)
@@ -18,7 +38,7 @@ big_font = pygame.font.Font('freesansbold.ttf', 50)
 
 
 #Variablees for maze drawing
-level = boards #current board only 1
+level = copy.deepcopy(LEVELS[current_level])
 colour = "blue"
 PI = math.pi
 flicker_counter = 0
@@ -53,7 +73,7 @@ counter = 0
 score = 0
 
 #Draw ui sections
-lives = 4
+lives = 5
 
 #PowerUps
 powerup = False
@@ -129,6 +149,40 @@ ghost_dead_sprites = load_dead_ghosts(sprite_sheet)
 ghost_spooked =sprite_sheet.get_image(5, 3,32,32,1.40625,"magenta")
 ghost_spooked2 =sprite_sheet.get_image(5, 2,32,32,1.40625,"magenta")
 ghost_dead =sprite_sheet.get_image(5, 2,32,32,1.40625,"magenta")
+
+# Utility functions for ghost pathfinding
+def pix_to_tile(cx, cy):
+    row = int(cy // TILE_H)
+    col = int(cx // TILE_W)
+    return row, col
+
+def is_walkable_for_dead(val):
+    # walls are 3 to 8 in map, walkable are 0,1,2
+    # dead ghosts can also go through gate (9) to re-enter box
+    return val < 3 or val == 9
+
+def build_dead_distance_map(level, target_tile):
+    rows = len(level)
+    cols = len(level[0])
+    dist = [[-1 for _ in range(cols)] for _ in range(rows)]
+
+    tr, tc = target_tile
+    q = deque()
+    dist[tr][tc] = 0
+    q.append((tr, tc))
+
+    while q:
+        r, c = q.popleft()
+        for dr, dc in ((0,1),(0,-1),(1,0),(-1,0)):
+            nr, nc = r + dr, c + dc
+            if 0 <= nr < rows and 0 <= nc < cols and dist[nr][nc] == -1:
+                if is_walkable_for_dead(level[nr][nc]):
+                    dist[nr][nc] = dist[r][c] + 1
+                    q.append((nr, nc))
+    return dist
+
+DEAD_DIST = build_dead_distance_map(level, BOX_TARGET_TILE)
+
 
 # Ghost class
 class Ghost:
@@ -579,7 +633,7 @@ class Ghost:
         if self.x_pos < -30:
             self.x_pos = 900
         elif self.x_pos > 900:
-            self.x_pos - 30
+            self.x_pos = -30
         return self.x_pos, self.y_pos, self.direction
     def move_blinky(self):
         # r, l, u, d
@@ -931,7 +985,61 @@ class Ghost:
         elif self.x_pos > 900:
             self.x_pos = -30
         return self.x_pos, self.y_pos, self.direction         
-        
+    def move_dead_to_box(self, dead_dist):
+        # Update centers
+        self.center_x = self.x_pos + 22
+        self.center_y = self.y_pos + 22
+
+        r, c = pix_to_tile(self.center_x, self.center_y)
+
+        # If somehow off grid, just don't move
+        if not (0 <= r < len(dead_dist) and 0 <= c < len(dead_dist[0])):
+            return self.x_pos, self.y_pos, self.direction
+
+        # Choose the best neighbor (lowest distance)
+        best_dir = None
+        best_val = None
+
+        # directions: 0 right, 1 left, 2 up, 3 down
+        candidates = [
+            (0, 0, 1),
+            (1, 0, -1),
+            (2, -1, 0),
+            (3, 1, 0),
+        ]
+
+        for d, dr, dc in candidates:
+            nr, nc = r + dr, c + dc
+            if 0 <= nr < len(dead_dist) and 0 <= nc < len(dead_dist[0]):
+                v = dead_dist[nr][nc]
+                if v != -1:
+                    if best_val is None or v < best_val:
+                        best_val = v
+                        best_dir = d
+
+        # If no path found, do nothing
+        if best_dir is None:
+            return self.x_pos, self.y_pos, self.direction
+
+        # Move in the chosen direction using your style
+        self.direction = best_dir
+        if self.direction == 0:
+            self.x_pos += self.speed
+        elif self.direction == 1:
+            self.x_pos -= self.speed
+        elif self.direction == 2:
+            self.y_pos -= self.speed
+        elif self.direction == 3:
+            self.y_pos += self.speed
+
+        # tunnel wrap
+        if self.x_pos < -30:
+            self.x_pos = 900
+        elif self.x_pos > 900:
+            self.x_pos = -30
+
+        return self.x_pos, self.y_pos, self.direction
+   
 # draw board using different shape orientations
 def draw_boards(level):
     #The heigh of th board and width seperated by the amount of tiles
@@ -1079,6 +1187,25 @@ def draw_ui():
         start_text = big_font.render("PRESS P TO START", True, "green")
         text_rect = start_text.get_rect(center=(WIDTH // 2, HEIGHT // 2))
         screen.blit(start_text, text_rect)
+    
+    if game_over:
+        pygame.draw.rect(screen, "white", [50,200,800,300],0,10)
+        pygame.draw.rect(screen, "black", [70,220,760,260],0,10)
+        over_text = big_font.render("GAME OVER", True, "white")
+        over_text2 = big_font.render("PRESS SPACE BAR TO MENU", True, "white")
+        screen.blit(over_text, (300, 275))
+        screen.blit(over_text2, (100, 375))
+    if game_won:
+        
+        pygame.draw.rect(screen, "white", [50,200,800,300],0,10)
+        pygame.draw.rect(screen, "black", [70,220,760,260],0,10)
+        over_text = big_font.render("VICTORY", True, "white")
+        over_text2 = big_font.render("SPACE BAR TO NEXT LEVEL", True, "white")
+        screen.blit(over_text, (300, 275))
+        screen.blit(over_text2, (100, 375))
+    lvl_text = font.render(f'Level: {current_level + 1}', True, 'white')
+    screen.blit(lvl_text, (250, 920))
+
 
 def get_targets(blink_x, blink_y, ink_x, ink_y, pink_x, pink_y, clyd_x, clyd_y):
     
@@ -1167,6 +1294,33 @@ def get_targets(blink_x, blink_y, ink_x, ink_y, pink_x, pink_y, clyd_x, clyd_y):
     
     
     return target_list
+def reset_entities_for_level():
+    global player_x, player_y, direction, direction_command, moving
+    global blinky_x, blinky_y, blinky_direction
+    global inky_x, inky_y, inky_direction
+    global pinky_x, pinky_y, pinky_direction
+    global clyde_x, clyde_y, clyde_direction
+    global eaten_ghosts
+    global blinky_dead, inky_dead, pinky_dead, clyde_dead
+    global powerup, power_counter
+
+    powerup = False
+    power_counter = 0
+
+    player_x, player_y = 450, 663
+    direction = 0
+    direction_command = 0
+
+    blinky_x, blinky_y, blinky_direction = 56, 58, 0
+    inky_x, inky_y, inky_direction = 440, 388, 2
+    pinky_x, pinky_y, pinky_direction = 440, 438, 2
+    clyde_x, clyde_y, clyde_direction = 440, 438, 2
+
+    eaten_ghosts = [False, False, False, False]
+    blinky_dead = inky_dead = pinky_dead = clyde_dead = False
+
+    # IMPORTANT: next level should not auto-run
+    moving = False
 
 #counter2 = 0
 
@@ -1203,6 +1357,10 @@ while run:
     if clyde_dead:
         ghost_speeds[3] = 4
 
+    game_won = True
+    for i in range(len(level)):
+        if 1 in level[i] or 2 in level[i]:
+            game_won = False
 
     player_circle = pygame.draw.circle(screen, "black", (centre_x, centre_y), 20, 2)
     draw_player()
@@ -1237,28 +1395,41 @@ while run:
 
 
     #player movement
-    if moving:
+    if moving and game_over == False and game_won == False:
         player_x, player_y = move_player(player_x, player_y)
-        if not blinky_dead and not blinky.in_box:
+        if blinky_dead:
+            blinky_x, blinky_y, blinky_direction = blinky.move_dead_to_box(DEAD_DIST)
+        elif not blinky.in_box:
             blinky_x, blinky_y, blinky_direction = blinky.move_blinky()
         else:
             blinky_x, blinky_y, blinky_direction = blinky.move_clyde()
-        if not pinky_dead and not pinky.in_box:
-            pinky_x, pinky_y, pinky_direction = pinky.move_pinky()
-        else:
-            pinky_x, pinky_y, pinky_direction = pinky.move_clyde()
-        if not inky_dead and not inky.in_box:
+
+        if inky_dead:
+            inky_x, inky_y, inky_direction = inky.move_dead_to_box(DEAD_DIST)
+        elif not inky.in_box:
             inky_x, inky_y, inky_direction = inky.move_inky()
         else:
             inky_x, inky_y, inky_direction = inky.move_clyde()
-        clyde_x, clyde_y, clyde_direction = clyde.move_clyde()
-        
 
+        if pinky_dead:
+            pinky_x, pinky_y, pinky_direction = pinky.move_dead_to_box(DEAD_DIST)
+        elif not pinky.in_box:
+            pinky_x, pinky_y, pinky_direction = pinky.move_pinky()
+        else:
+            pinky_x, pinky_y, pinky_direction = pinky.move_clyde()
 
+        if clyde_dead:
+            clyde_x, clyde_y, clyde_direction = clyde.move_dead_to_box(DEAD_DIST)
+        elif not clyde.in_box:
+            clyde_x, clyde_y, clyde_direction = clyde.move_clyde()
+        else:
+            clyde_x, clyde_y, clyde_direction = clyde.move_clyde()
+
+   # print("plinky tile:", pix_to_tile(pinky.center_x, pinky.center_y))
 
     #score checker
     score,powerup, power_counter,eaten_ghosts = check_collisions(score,powerup, power_counter,eaten_ghosts)
-    print("score:", score)
+    #print("score:", score)
 
     #Managing Pacman animations
     if counter < 19:
@@ -1486,6 +1657,29 @@ while run:
             if event.key == pygame.K_p and not moving and not game_over and not game_won:
                 moving = True
 
+            if event.key == pygame.K_SPACE:
+                if game_over:
+                    # restart from level 0
+                    current_level = 0
+                    level = copy.deepcopy(LEVELS[current_level])
+                    DEAD_DIST = build_dead_distance_map(level, BOX_TARGET_TILE)
+                    score = 0
+                    lives = 3
+                    game_over = False
+                    game_won = False
+                    reset_entities_for_level()
+
+                elif game_won:
+                    # go to next level (or loop back)
+                    current_level += 1
+                    if current_level >= len(LEVELS):
+                        current_level = 0   # or set a "you finished the game" screen
+
+                    level = copy.deepcopy(LEVELS[current_level])
+                    DEAD_DIST = build_dead_distance_map(level, BOX_TARGET_TILE)
+                    game_won = False
+                    game_over = False
+                    reset_entities_for_level()
 
         
         # Input and direction manager
@@ -1540,4 +1734,5 @@ while run:
     # flips the display which in turn changes the screen to the next frame
     pygame.display.flip()
 pygame.quit()
+
 

@@ -14,9 +14,31 @@ screen = pygame.display.set_mode([WIDTH, HEIGHT])
 timer = pygame.time.Clock()
 fps = 60
 
+conslives = 3
 
+#level variables
 LEVELS = [boards,boards]
 current_level = 0
+
+# Menu system
+MENU_MAIN = "main"
+MENU_DIFFICULTY = "difficulty"
+MENU_CONTROLS = "controls"
+MENU_LEADERBOARD = "leaderboard"
+
+cover_active = True           # start with cover menu on
+menu_screen = MENU_MAIN
+menu_index = 0
+
+difficulty_names = ["EASY", "NORMAL", "HARD"]
+difficulty_index = 1          # default NORMAL
+
+# simple placeholder leaderboard data
+leaderboard_rows = [
+    ("AAA", 12000),
+    ("BBB", 8000),
+    ("YOU", 0),
+]
 
 
 #Tile size calculations
@@ -70,7 +92,7 @@ counter = 0
 score = 0
 
 #Draw ui sections
-lives = 5
+lives = conslives 
 
 #PowerUps
 powerup = False
@@ -179,6 +201,154 @@ def build_dead_distance_map(level, target_tile):
     return dist
 
 DEAD_DIST = build_dead_distance_map(level, BOX_TARGET_TILE)
+
+def apply_difficulty(difficulty_index):
+    """
+    Applies difficulty by changing speeds (you can expand this later).
+    Called when leaving the difficulty screen or starting the game.
+    """
+    global player_speed, ghost_speeds
+
+    # Base presets (tweak to taste)
+    if difficulty_index == 0:       # EASY
+        player_speed = 2
+        ghost_speeds = [1, 1, 1, 1]
+    elif difficulty_index == 1:     # NORMAL
+        player_speed = 2
+        ghost_speeds = [2, 2, 2, 2]
+    else:                            # HARD
+        player_speed = 2
+        ghost_speeds = [5,5,5,5]
+
+    return ghost_speeds
+def draw_cover_overlay():
+    """Dark full-screen overlay."""
+    overlay = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
+    overlay.fill((0, 0, 0, 220))  # RGBA (alpha=220)
+    screen.blit(overlay, (0, 0))
+
+
+def draw_menu_text_center(text, y, is_selected=False, size="small"):
+    color = "yellow" if is_selected else "white"
+    f = big_font if size == "big" else font
+    surf = f.render(text, True, color)
+    screen.blit(surf, surf.get_rect(center=(WIDTH // 2, y)))
+
+
+def draw_cover_menu():
+    draw_cover_overlay()
+
+        # title
+    draw_menu_text_center("PACMANY", 180, size="big")
+
+        # Only show difficulty status on relevant screens
+    if menu_screen in (MENU_MAIN, MENU_DIFFICULTY):
+        draw_menu_text_center(
+            f"DIFFICULTY: {difficulty_names[difficulty_index]}",
+            250,
+            size="small"
+        )
+
+    if menu_screen == MENU_MAIN:
+        options = ["START GAME", "DIFFICULTY", "LEADERBOARD", "CONTROLS", "QUIT"]
+        y0 = 340
+        gap = 45
+        for i, opt in enumerate(options):
+            draw_menu_text_center(opt, y0 + i * gap, is_selected=(i == menu_index))
+        draw_menu_text_center("Use UP/DOWN to choose, ENTER to select", 750)
+
+    elif menu_screen == MENU_DIFFICULTY:
+        draw_menu_text_center("DIFFICULTY", 320, size="big")
+        draw_menu_text_center("Use LEFT/RIGHT to change", 420)
+        draw_menu_text_center("ESC to go back", 470)
+
+    elif menu_screen == MENU_CONTROLS:
+        draw_menu_text_center("CONTROLS", 280, size="big")
+        lines = [
+            "ARROWS: Move",
+            "POWER PELLET: Eat ghosts temporarily",
+            "ENTER (in menu): Select",
+            "ESC: Back",
+        ]
+        y = 380
+        for line in lines:
+            draw_menu_text_center(line, y)
+            y += 35
+
+    elif menu_screen == MENU_LEADERBOARD:
+        draw_menu_text_center("LEADERBOARD", 260, size="big")
+        y = 360
+        for name, s in leaderboard_rows:
+            draw_menu_text_center(f"{name}  -  {s}", y)
+            y += 35
+        draw_menu_text_center("(Placeholder screen - save/load later)", 520)
+        draw_menu_text_center("ESC to go back", 590)
+
+
+def handle_menu_key(event):
+    """
+    Returns True if it consumed input.
+    """
+    global cover_active, menu_screen, menu_index, difficulty_index, run, moving
+
+    if event.type != pygame.KEYDOWN:
+        return False
+
+    if menu_screen == MENU_MAIN:
+        options_count = 5  # START, DIFFICULTY, LEADERBOARD, CONTROLS, QUIT
+
+        if event.key == pygame.K_UP:
+            menu_index = (menu_index - 1) % options_count
+            return True
+        if event.key == pygame.K_DOWN:
+            menu_index = (menu_index + 1) % options_count
+            return True
+
+        if event.key in (pygame.K_RETURN, pygame.K_KP_ENTER):
+            if menu_index == 0:  # START GAME
+                apply_difficulty(difficulty_index)
+                cover_active = False
+                moving = True          # start immediately
+                return True
+            if menu_index == 1:  # DIFFICULTY
+                menu_screen = MENU_DIFFICULTY
+                return True
+            if menu_index == 2:  # LEADERBOARD
+                menu_screen = MENU_LEADERBOARD
+                return True
+            if menu_index == 3:  # CONTROLS
+                menu_screen = MENU_CONTROLS
+                return True
+            if menu_index == 4:  # QUIT
+                run = False
+                return True
+
+        return False
+
+    # difficulty screen
+    if menu_screen == MENU_DIFFICULTY:
+        if event.key == pygame.K_LEFT:
+            difficulty_index = (difficulty_index - 1) % len(difficulty_names)
+            apply_difficulty(difficulty_index)
+            return True
+        if event.key == pygame.K_RIGHT:
+            difficulty_index = (difficulty_index + 1) % len(difficulty_names)
+            apply_difficulty(difficulty_index)
+            return True
+        if event.key == pygame.K_ESCAPE:
+            menu_screen = MENU_MAIN
+            return True
+        return False
+
+    # controls / leaderboard screens
+    if menu_screen in (MENU_CONTROLS, MENU_LEADERBOARD):
+        if event.key == pygame.K_ESCAPE:
+            menu_screen = MENU_MAIN
+            return True
+        return False
+
+    return False
+
 
 
 # Ghost class
@@ -1389,11 +1559,13 @@ while run:
     player_circle = pygame.draw.circle(screen, "black", (centre_x, centre_y), 20, 2)
     draw_player()
             
-
+    if cover_active:
+        moving= False
 
     #player movement
-    if moving and game_over == False and game_won == False:
+    if (not cover_active) and moving and (not game_over) and (not game_won):
         player_x, player_y = move_player(player_x, player_y)
+
         if blinky_dead:
             blinky_x, blinky_y, blinky_direction = blinky.move_dead_to_box(DEAD_DIST)
         elif not blinky.in_box:
@@ -1458,6 +1630,9 @@ while run:
     # UI drawing section
     draw_ui()
     targets = get_targets(blinky_x, blinky_y, inky_x, inky_y, pinky_x, pinky_y, clyde_x, clyde_y)
+    if cover_active:
+        draw_cover_menu()
+
 
     if not powerup:
         if (player_circle.colliderect(blinky.rect) and not blinky.dead) or \
@@ -1649,6 +1824,12 @@ while run:
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
             run = False
+        
+        # If cover menu is active, it owns the input
+        if cover_active:
+            if handle_menu_key(event):
+                continue
+
 
         if event.type == pygame.KEYDOWN:
             if event.key == pygame.K_p and not moving and not game_over and not game_won:
@@ -1656,27 +1837,38 @@ while run:
 
             if event.key == pygame.K_SPACE:
                 if game_over:
-                    # restart from level 0
+                    # return to main menu
+                    cover_active = True
+                    menu_screen = MENU_MAIN
+                    menu_index = 0
+
                     current_level = 0
                     level = copy.deepcopy(LEVELS[current_level])
                     DEAD_DIST = build_dead_distance_map(level, BOX_TARGET_TILE)
+
                     score = 0
-                    lives = 3
+                    lives = conslives
                     game_over = False
                     game_won = False
+                    moving = False
+
                     reset_entities_for_level()
 
                 elif game_won:
-                    # go to next level (or loop back)
+                    # advance to next level, then show READY screen (not menu)
                     current_level += 1
                     if current_level >= len(LEVELS):
-                        current_level = 0   # or set a "you finished the game" screen
+                        current_level = 0  # loop back (or add final victory screen later)
 
                     level = copy.deepcopy(LEVELS[current_level])
                     DEAD_DIST = build_dead_distance_map(level, BOX_TARGET_TILE)
+
                     game_won = False
                     game_over = False
+                    moving = False
+
                     reset_entities_for_level()
+
 
         
         # Input and direction manager

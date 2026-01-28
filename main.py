@@ -27,7 +27,7 @@ fps = 60
 conslives = 3
 
 #level variables
-LEVELS = [boards,boards]
+LEVELS = [boards[1],boards[0]]
 current_level = 0
 
 # Menu system
@@ -110,6 +110,10 @@ lives = conslives
 #PowerUps
 powerup = False
 power_counter = 0
+powerup_duration_frames = 600          
+powerup_flash_frames = 3 * 60          # last 3 seconds = 180 frames
+flash_toggle_rate = 10                 # change every 10 frames (~6 flashes/sec)
+
 
 #Startup delay variables
 moving = False
@@ -396,7 +400,14 @@ class Ghost:
         if (not powerup and not self.dead) or (eaten_ghosts[self.id]and powerup and not self.dead):
             screen.blit(self.img,(self.x_pos,self.y_pos)) 
         elif powerup and not self.dead and not eaten_ghosts[self.id]:
-            screen.blit(ghost_spooked,(self.x_pos,self.y_pos)) 
+            # Flash in the last 3 seconds of frightened mode
+            if power_counter >= (powerup_duration_frames - powerup_flash_frames):
+                if (power_counter // flash_toggle_rate) % 2 == 0:
+                    screen.blit(ghost_spooked, (self.x_pos, self.y_pos))
+                else:
+                    screen.blit(ghost_spooked2, (self.x_pos, self.y_pos))
+            else:
+                screen.blit(ghost_spooked, (self.x_pos, self.y_pos))
         else:
             dir_key = {0: "right", 1: "left", 2: "up", 3: "down"}[self.direction]
             screen.blit(ghost_dead_sprites[dir_key], (self.x_pos, self.y_pos))

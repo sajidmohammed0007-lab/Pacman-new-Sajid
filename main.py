@@ -68,7 +68,7 @@ menu_index = 0
 difficulty_names = ["EASY", "NORMAL", "HARD"]
 difficulty_index = 1          # default NORMAL
 
-# simple placeholder leaderboard data
+# leaderboard data
 leaderboard_rows = leaderboard.get_menu_rows()
 
 
@@ -1937,14 +1937,6 @@ while run:
         enter_name_active = True
         name_buffer = ""
 
-        # compute final time once
-        if run_start_ticks is not None:
-            final_time_seconds = (pygame.time.get_ticks() - run_start_ticks) / 1000.0
-        else:
-            final_time_seconds = 0.0
-
-     
-    
 
 
 
@@ -1955,29 +1947,53 @@ while run:
             run = False
 
         if event.type == pygame.KEYDOWN and enter_name_active:
+
+    # ENTER = submit score
             if event.key == pygame.K_RETURN:
                 rows, is_new = leaderboard.add_score(
                     name_buffer,
                     score,
                     current_level + 1
                 )
-
                 leaderboard_rows = leaderboard.get_menu_rows()
-
                 new_highscore_flag = is_new
-                new_highscore_ticks = pygame.time.get_ticks()
 
                 score_submitted = True
                 enter_name_active = False
 
+            # SPACE = skip saving score and go straight to menu
+            elif event.key == pygame.K_SPACE:
+                enter_name_active = False
+                score_submitted = True   # prevents popup reopening
+
+                cover_active = True
+                menu_screen = MENU_MAIN
+                menu_index = 0
+
+                current_level = 0
+                level = copy.deepcopy(LEVELS[current_level])
+                DEAD_DIST = build_dead_distance_map(level, BOX_TARGET_TILE)
+
+                score = 0
+                lives = conslives
+                game_over = False
+                game_won = False
+                moving = False
+
+                reset_entities_for_level()
+
+            # BACKSPACE = delete last character
             elif event.key == pygame.K_BACKSPACE:
                 name_buffer = name_buffer[:-1]
+
+            # Otherwise add typed character
             else:
                 ch = event.unicode.upper()
-                if ch.isalnum() and len(name_buffer) < leaderboard.NAME_MAXLEN:
+                if ch.isalnum() and len(name_buffer) < leaderboard.max_len:
                     name_buffer += ch
 
-            continue  # important: don't let this keypress also move Pac-Man/menu
+            continue  # don't let this keypress also move Pac-Man/menu
+
 
 
         # If cover menu is active, it owns the input

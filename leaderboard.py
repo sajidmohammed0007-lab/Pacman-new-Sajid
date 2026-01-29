@@ -1,20 +1,19 @@
 import os
 import csv
 
-LEADERBOARD_FILE = "leaderboard.csv"
-MAX_LEADERBOARD = 10
-NAME_MAXLEN = 10
-
-CSV_HEADER = ["name", "score", "level"]
+# Configuration
+leader_board_file = "leaderboard.csv"
+max_len = 10
+csv_header = ["name", "score", "level"]
 
 
 def bubble_sort(rows):
-    """
-    rows = list of dicts: {"name": str, "score": int, "level": int}
-    Sort by:
-      1) score DESC
-      2) level DESC
-    """
+   
+    #rows = list of dicts: {"name": str, "score": int, "level": int}
+    #Sort by:
+    # score DESC
+    # level DESC
+   
     arr = rows[:]
     n = len(arr)
     for i in range(n):
@@ -29,22 +28,22 @@ def bubble_sort(rows):
 
 
 def ensure_file_exists():
-    if not os.path.exists(LEADERBOARD_FILE):
-        with open(LEADERBOARD_FILE, "w", newline="", encoding="utf-8") as f:
+    if not os.path.exists(leader_board_file):
+        with open(leader_board_file, "w", newline="", encoding="utf-8") as f:
             writer = csv.writer(f)
-            writer.writerow(CSV_HEADER)
+            writer.writerow(csv_header)
 
 
 def load_leaderboard():
     ensure_file_exists()
     rows = []
     try:
-        with open(LEADERBOARD_FILE, "r", newline="", encoding="utf-8") as f:
+        with open(leader_board_file, "r", newline="", encoding="utf-8") as f:
             reader = csv.DictReader(f)
             for r in reader:
                 try:
                     rows.append({
-                        "name": str(r.get("name", ""))[:NAME_MAXLEN] or "PLAYER",
+                        "name": str(r.get("name", ""))[:max_len] or "PLAYER",
                         "score": int(r.get("score", 0)),
                         "level": int(r.get("level", 1)),
                     })
@@ -57,12 +56,12 @@ def load_leaderboard():
 
 def save_leaderboard(rows):
     ensure_file_exists()
-    with open(LEADERBOARD_FILE, "w", newline="", encoding="utf-8") as f:
-        writer = csv.DictWriter(f, fieldnames=CSV_HEADER)
+    with open(leader_board_file, "w", newline="", encoding="utf-8") as f:
+        writer = csv.DictWriter(f, fieldnames=csv_header)
         writer.writeheader()
-        for r in rows[:MAX_LEADERBOARD]:
+        for r in rows:
             writer.writerow({
-                "name": r["name"][:NAME_MAXLEN],
+                "name": r["name"][:max_len],
                 "score": int(r["score"]),
                 "level": int(r["level"]),
             })
@@ -76,12 +75,11 @@ def get_top_score():
 
 
 def add_score(name, score, level_reached):
-    """
-    Adds a new entry, sorts with bubble sort, trims to MAX.
-    Returns:
-      (sorted_rows, is_new_highscore)
-    """
-    name = (name.strip() or "PLAYER")[:NAME_MAXLEN]
+    
+    #Adds a new entry, sorts with bubble sort, saves to file
+    #Returns: (sorted_rows, is_new_highscore)
+    
+    name = (name.strip() or "PLAYER")[:max_len]
     score = int(score)
     level_reached = int(level_reached)
 
@@ -94,7 +92,7 @@ def add_score(name, score, level_reached):
         "level": level_reached
     })
 
-    rows = bubble_sort(rows)[:MAX_LEADERBOARD]
+    rows = bubble_sort(rows)
     save_leaderboard(rows)
 
     # Highscore detection
@@ -113,10 +111,10 @@ def add_score(name, score, level_reached):
 
 
 def get_menu_rows(limit=6):
-    """
-    Returns list of tuples for menu UI:
-    [(name, 'score (LV X)'), ...]
-    """
+    
+    #Returns list of tuples for menu UI:
+    #[(name, 'score (LV X)'), ...]
+    
     rows = bubble_sort(load_leaderboard())[:limit]
     out = []
     for r in rows:

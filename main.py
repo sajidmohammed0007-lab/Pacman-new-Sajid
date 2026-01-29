@@ -27,8 +27,17 @@ fps = 60
 conslives = 3
 
 #level variables
-LEVELS = [boards[1],boards[0]]
+LEVELS = []
+def get_levels():
+    for i in range(len(boards)):
+        LEVELS.append(boards[i])
+    return LEVELS
+LEVELS = get_levels()
 current_level = 0
+level_colour = ["blue","green","red"]
+def get_colour(lvl):
+    for i in range(len(LEVELS)):
+        return level_colour[lvl % len(level_colour)]
 
 # Menu system
 MENU_MAIN = "main"
@@ -122,8 +131,8 @@ moving = False
 eaten_ghosts = [False, False,False,False]
 
 # Ghost positions
-blinky_x = 56
-blinky_y = 58
+blinky_x = 440#56
+blinky_y = 388#58
 blinky_direction = 0
 inky_x = 440
 inky_y = 388
@@ -1509,6 +1518,7 @@ def reset_entities_for_level():
     global eaten_ghosts
     global blinky_dead, inky_dead, pinky_dead, clyde_dead
     global powerup, power_counter
+    global colour
 
     powerup = False
     power_counter = 0
@@ -1517,7 +1527,7 @@ def reset_entities_for_level():
     direction = 0
     direction_command = 0
 
-    blinky_x, blinky_y, blinky_direction = 56, 58, 0
+    blinky_x, blinky_y, blinky_direction = 440, 388, 0
     inky_x, inky_y, inky_direction = 440, 388, 2
     pinky_x, pinky_y, pinky_direction = 440, 438, 2
     clyde_x, clyde_y, clyde_direction = 440, 438, 2
@@ -1525,6 +1535,7 @@ def reset_entities_for_level():
     eaten_ghosts = [False, False, False, False]
     blinky_dead = inky_dead = pinky_dead = clyde_dead = False
 
+    colour = get_colour(current_level)
     # IMPORTANT: next level should not auto-run
     moving = False
 
@@ -1703,8 +1714,8 @@ while run:
                 player_y = 663
                 direction = 0
                 direction_command = 0
-                blinky_x = 56
-                blinky_y = 58
+                blinky_x = 440
+                blinky_y = 388
                 blinky_direction = 0
                 inky_x = 440
                 inky_y = 388
@@ -1738,8 +1749,8 @@ while run:
             player_y = 663
             direction = 0
             direction_command = 0
-            blinky_x = 56
-            blinky_y = 58
+            blinky_x = 440
+            blinky_y = 388
             blinky_direction = 0
             inky_x = 440
             inky_y = 388
@@ -1770,8 +1781,8 @@ while run:
             player_y = 663
             direction = 0
             direction_command = 0
-            blinky_x = 56
-            blinky_y = 58
+            blinky_x = 440
+            blinky_y = 388
             blinky_direction = 0
             inky_x = 440
             inky_y = 388
@@ -1802,8 +1813,8 @@ while run:
             player_y = 663
             direction = 0
             direction_command = 0
-            blinky_x = 56
-            blinky_y = 58
+            blinky_x = 440
+            blinky_y = 388
             blinky_direction = 0
             inky_x = 440
             inky_y = 388
@@ -1834,8 +1845,8 @@ while run:
             player_y = 663
             direction = 0
             direction_command = 0
-            blinky_x = 56
-            blinky_y = 58
+            blinky_x = 440
+            blinky_y = 388
             blinky_direction = 0
             inky_x = 440
             inky_y = 388
@@ -1923,6 +1934,7 @@ while run:
                 elif game_won:
                     # advance to next level, then show READY screen (not menu)
                     current_level += 1
+                    colour = get_colour(current_level)
                     win_sfx_played = False
                     gameover_sfx_played = False
 

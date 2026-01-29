@@ -5,6 +5,9 @@ from board import boards
 import math 
 import spritesheet
 from collections import deque
+import leaderboard
+
+
 #initialising key variables
 pygame.mixer.pre_init(44100, -16, 2, 512)
 pygame.init()
@@ -12,9 +15,6 @@ pygame.mixer.init()
 
 from audio_manager import AudioManager
 audio = AudioManager()
-
-
-
 
 
 pygame.init()
@@ -47,6 +47,19 @@ MENU_LEADERBOARD = "leaderboard"
 game_over_sfx_played = False
 win_sfx_played = False
 
+#leaderboard settings
+enter_name_active = False
+name_buffer = ""
+score_submitted = False
+
+run_start_ticks = None
+final_time_seconds = 0.0
+
+new_highscore_flag = False
+new_highscore_ticks = 0  # to time the message
+
+
+
 
 cover_active = True           # start with cover menu on
 menu_screen = MENU_MAIN
@@ -56,11 +69,7 @@ difficulty_names = ["EASY", "NORMAL", "HARD"]
 difficulty_index = 1          # default NORMAL
 
 # simple placeholder leaderboard data
-leaderboard_rows = [
-    ("AAA", 12000),
-    ("BBB", 8000),
-    ("YOU", 0),
-]
+leaderboard_rows = leaderboard.get_menu_rows()
 
 
 #Tile size calculations
@@ -307,7 +316,6 @@ def draw_cover_menu():
         for name, s in leaderboard_rows:
             draw_menu_text_center(f"{name}  -  {s}", y)
             y += 35
-        draw_menu_text_center("(Placeholder screen - save/load later)", 520)
         draw_menu_text_center("ESC to go back", 590)
 
 
@@ -316,6 +324,8 @@ def handle_menu_key(event):
     Returns True if it consumed input.
     """
     global cover_active, menu_screen, menu_index, difficulty_index, run, moving
+    global run_start_ticks, score_submitted, enter_name_active
+
 
     if event.type != pygame.KEYDOWN:
         return False
@@ -340,6 +350,9 @@ def handle_menu_key(event):
                 audio.start()
                 cover_active = False
                 moving = True
+                run_start_ticks = pygame.time.get_ticks()
+                score_submitted = False
+                enter_name_active = False
                 return True
             if menu_index == 1:  # DIFFICULTY
                 menu_screen = MENU_DIFFICULTY
@@ -1420,6 +1433,21 @@ def draw_ui():
         screen.blit(over_text2, (100, 375))
     lvl_text = font.render(f'Level: {current_level + 1}', True, 'white')
     screen.blit(lvl_text, (250, 920))
+def draw_name_entry_popup():
+    # Larger box for readability
+    pygame.draw.rect(screen, "white", [100, 500, 700, 220], 0, 12)
+    pygame.draw.rect(screen, "black", [120, 520, 660, 180], 0, 12)
+
+    title = big_font.render("ENTER YOUR NAME", True, "white")
+    screen.blit(title, title.get_rect(center=(WIDTH // 2, 555)))
+
+    hint = font.render("Press ENTER to submit  |  SPACE to skip", True, "white")
+    screen.blit(hint, hint.get_rect(center=(WIDTH // 2, 595)))
+
+    shown = name_buffer if name_buffer else "_"
+    name_text = big_font.render(shown, True, "yellow")
+    screen.blit(name_text, name_text.get_rect(center=(WIDTH // 2, 650)))
+
 
 
 def get_targets(blink_x, blink_y, ink_x, ink_y, pink_x, pink_y, clyd_x, clyd_y):
@@ -1652,6 +1680,10 @@ while run:
             clyde_x, clyde_y, clyde_direction = clyde.move_clyde()
         else:
             clyde_x, clyde_y, clyde_direction = clyde.move_clyde()
+        run_start_ticks = pygame.time.get_ticks()
+        score_submitted = False
+        enter_name_active = False
+
 
    # print("plinky tile:", pix_to_tile(pinky.center_x, pinky.center_y))
 
@@ -1694,9 +1726,18 @@ while run:
    
     # UI drawing section
     draw_ui()
+    if enter_name_active:
+        draw_name_entry_popup()
     targets = get_targets(blinky_x, blinky_y, inky_x, inky_y, pinky_x, pinky_y, clyde_x, clyde_y)
     if cover_active:
         draw_cover_menu()
+
+    if new_highscore_flag:
+        if pygame.time.get_ticks() - new_highscore_ticks < 2000:
+            msg = big_font.render("NEW HIGHSCORE!", True, "yellow")
+            screen.blit(msg, msg.get_rect(center=(WIDTH//2, 120)))
+        else:
+            new_highscore_flag = False
 
 
     if not powerup:
@@ -1891,7 +1932,18 @@ while run:
         score += (2 ** eaten_ghosts.count(True)) * 100
         audio.ghost_eaten()
 
-        
+    
+    if game_over and (not cover_active) and (not score_submitted) and (not enter_name_active):
+        enter_name_active = True
+        name_buffer = ""
+
+        # compute final time once
+        if run_start_ticks is not None:
+            final_time_seconds = (pygame.time.get_ticks() - run_start_ticks) / 1000.0
+        else:
+            final_time_seconds = 0.0
+
+     
     
 
 
@@ -1901,7 +1953,33 @@ while run:
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
             run = False
-        
+
+        if event.type == pygame.KEYDOWN and enter_name_active:
+            if event.key == pygame.K_RETURN:
+                rows, is_new = leaderboard.add_score(
+                    name_buffer,
+                    score,
+                    current_level + 1
+                )
+
+                leaderboard_rows = leaderboard.get_menu_rows()
+
+                new_highscore_flag = is_new
+                new_highscore_ticks = pygame.time.get_ticks()
+
+                score_submitted = True
+                enter_name_active = False
+
+            elif event.key == pygame.K_BACKSPACE:
+                name_buffer = name_buffer[:-1]
+            else:
+                ch = event.unicode.upper()
+                if ch.isalnum() and len(name_buffer) < leaderboard.NAME_MAXLEN:
+                    name_buffer += ch
+
+            continue  # important: don't let this keypress also move Pac-Man/menu
+
+
         # If cover menu is active, it owns the input
         if cover_active:
             if handle_menu_key(event):
@@ -1911,10 +1989,15 @@ while run:
         if event.type == pygame.KEYDOWN:
             if event.key == pygame.K_p and not moving and not game_over and not game_won:
                 moving = True
+                if run_start_ticks is None:
+                    run_start_ticks = pygame.time.get_ticks()
 
             if event.key == pygame.K_SPACE:
-                if game_over:
-                    # return to main menu
+                if event.key == pygame.K_SPACE and game_over:
+                 
+                    enter_name_active = False
+                    score_submitted = True
+
                     cover_active = True
                     menu_screen = MENU_MAIN
                     menu_index = 0
@@ -1930,6 +2013,7 @@ while run:
                     moving = False
 
                     reset_entities_for_level()
+                    continue
 
                 elif game_won:
                     # advance to next level, then show READY screen (not menu)

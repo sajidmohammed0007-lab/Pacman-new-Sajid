@@ -15,6 +15,7 @@ class AudioManager:
         self.sfx_win = pygame.mixer.Sound("Assets/audio/win.wav")
         self.sfx_game_over = pygame.mixer.Sound("Assets/audio/game_over.wav")
         self.sfx_start = pygame.mixer.Sound("Assets/audio/start.wav")
+        self.sfx_fruit = pygame.mixer.Sound("Assets/audio/fruit.wav")
 
         self.sfx_menu_move = pygame.mixer.Sound("Assets/audio/menu_move.wav")
         self.sfx_menu_select = pygame.mixer.Sound("Assets/audio/menu_select.wav")
@@ -60,3 +61,5 @@ class AudioManager:
         self.sfx_menu_select.play()
     def menu_back(self):
         self.sfx_menu_back.play()
+    def fruit(self):
+        self.sfx_fruit.play()

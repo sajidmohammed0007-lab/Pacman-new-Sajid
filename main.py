@@ -6,6 +6,7 @@ import math
 import spritesheet
 from collections import deque
 import leaderboard
+import fruit_system
 
 
 #initialising key variables
@@ -23,6 +24,10 @@ HEIGHT = 950
 screen = pygame.display.set_mode([WIDTH, HEIGHT])
 timer = pygame.time.Clock()
 fps = 60
+
+# Fruit system initialization
+fruit_mgr = fruit_system.FruitManager()
+fruit_icons = fruit_system.load_fruit_images()
 
 conslives = 3
 
@@ -1410,6 +1415,18 @@ def draw_ui():
             (650 + i * 40, 915)
         )
 
+        # Show up to the last 2 collected fruits (Ms Pac-Man style)
+    # (you can change 2 to however many you want)
+    x = 330
+    y = 915
+    last_two = fruit_mgr.collected[-2:]
+
+    for kind in last_two:
+        if kind in fruit_icons:
+            screen.blit(fruit_icons[kind], (x, y))
+        x += 40
+
+
     # Start game prompt
     if not moving and not game_over and not game_won:
         start_text = big_font.render("PRESS P TO START", True, "green")
@@ -1551,6 +1568,9 @@ def reset_entities_for_level():
     powerup = False
     power_counter = 0
 
+    fruit_mgr.reset()
+
+
     player_x, player_y = 450, 663
     direction = 0
     direction_command = 0
@@ -1590,6 +1610,21 @@ while run:
     centre_y = player_y +24
     turns_allowed = check_position(centre_x,centre_y)
 
+    # Only move/spawn fruits when the game is actually running (after P)
+    if (not cover_active) and moving and (not game_over) and (not game_won):
+        fruit_mgr.update(level, TILE_W, TILE_H)
+
+        collected = fruit_mgr.check_collect(player_circle)
+        if collected:
+            score += 150
+            audio.fruit()
+
+    # Still draw fruits even when stopped (optional)
+    if not cover_active:
+        fruit_mgr.draw(screen)
+
+
+
     if powerup:
         ghost_speeds = [1, 1, 1, 1]
     else:
@@ -1613,7 +1648,7 @@ while run:
 
     game_won = True
     for i in range(len(level)):
-        if 1 in level[i] or 2 in level[i]:
+        if 1 in level[i]:
             game_won = False
 
     player_circle = pygame.draw.circle(screen, "black", (centre_x, centre_y), 20, 2)

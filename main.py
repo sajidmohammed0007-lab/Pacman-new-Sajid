@@ -29,6 +29,10 @@ fps = 60
 fruit_mgr = fruit_system.FruitManager()
 fruit_icons = fruit_system.load_fruit_images()
 
+#fruit variables
+fruit_inventory = []
+
+
 conslives = 3
 
 #level variables
@@ -1417,14 +1421,15 @@ def draw_ui():
 
         # Show up to the last 2 collected fruits (Ms Pac-Man style)
     # (you can change 2 to however many you want)
+    # Show up to the last 2 fruits the player can USE
     x = 330
     y = 915
-    last_two = fruit_mgr.collected[-2:]
 
-    for kind in last_two:
+    for kind in fruit_inventory:
         if kind in fruit_icons:
             screen.blit(fruit_icons[kind], (x, y))
         x += 40
+
 
 
     # Start game prompt
@@ -1616,8 +1621,17 @@ while run:
 
         collected = fruit_mgr.check_collect(player_circle)
         if collected:
-            score += 150
+            score += 100
             audio.fruit()
+
+            # add collected fruit(s) to inventory (keep max 2)
+            for kind in collected:
+                fruit_inventory.append(kind)
+
+            # keep only last 2 fruits (like Ms Pac-Man)
+            if len(fruit_inventory) > 2:
+                fruit_inventory = fruit_inventory[-2:]
+            
 
     # Still draw fruits even when stopped (optional)
     if not cover_active:
@@ -2084,8 +2098,18 @@ while run:
                     moving = False
 
                     reset_entities_for_level()
+            
+            if (not cover_active) and moving and (not game_over) and (not game_won):
+                if event.key == pygame.K_f:
+                    # consume one cherry if available
+                    if "cherry" in fruit_inventory:
+                        fruit_inventory.remove("cherry")
 
-        
+                if event.key == pygame.K_g:
+                    # consume one strawberry if available
+                    if "strawberry" in fruit_inventory:
+                        fruit_inventory.remove("strawberry")
+
 
 
         

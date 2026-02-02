@@ -33,6 +33,9 @@ fruit_icons = fruit_system.load_fruit_images()
 fruit_inventory = []
 
 
+
+
+
 conslives = 3
 
 #level variables
@@ -88,7 +91,17 @@ TILE_W = WIDTH // 30
 # Pick the tile you want dead ghosts to reach.
 BOX_TARGET_TILE = (16, 15)  # (row, col) 
 
+#Game variables
+# ---------- ability visuals (iteration: visuals only) ----------
+laser_shots = []   # each item: {"x": int, "y": int, "dir": int, "frames": int}
+bombs = []         # each item: {"x": int, "y": int, "timer": int, "explode": int}
 
+laser_show_frames = 200          # how long the laser line stays visible
+bomb_timer_frames = 1 * 600      # 2 seconds at 60 fps
+bomb_explode_frames = 120        # explosion ring visible for ~0.2s
+
+# bomb radius = 3x3 tiles (so radius is 1.5 tiles from centre)
+bomb_radius_px = int(1.5 * max(TILE_W, TILE_H))
 
 #Font settings
 font = pygame.font.Font('freesansbold.ttf', 20)
@@ -1390,11 +1403,11 @@ def check_collisions(scor, power,power_count,eaten_ghosts):
     if 0< player_x < 870:
         if level[centre_y//num1][centre_x//num2] == 1: #checks position in maze / changes orb value to 0(background)
             level[centre_y//num1][centre_x//num2] = 0
-            scor += 10  #increments score counter
+            scor += int(10 * level_multiplier())  #increments score counter
             ate_pellet = True
         if level[centre_y//num1][centre_x//num2] == 2:
             level[centre_y//num1][centre_x//num2] = 0
-            scor += 50    # Larger score incremetn for 2(big orbs)
+            scor += int(50 * level_multiplier())    # Larger score incremetn for 2(big orbs)
             power = True
             power_count = 0
             eaten_ghosts = [False,False,False,False]
@@ -1430,6 +1443,9 @@ def draw_ui():
             screen.blit(fruit_icons[kind], (x, y))
         x += 40
 
+    mult = level_multiplier()
+    mult_text = font.render(f'Mult: x{mult:.1f}', True, 'white')
+    screen.blit(mult_text, (400, 920))   # adjust position as you like
 
 
     # Start game prompt
@@ -1593,6 +1609,174 @@ def reset_entities_for_level():
     moving = False
 
 #counter2 = 0
+def player_centre():
+    # matches your existing centre offsets
+    return player_x + 23, player_y + 24
+
+def dir_vector(d):
+    # your direction: 0 right, 1 left, 2 up, 3 down
+    if d == 0:
+        return 1, 0
+    if d == 1:
+        return -1, 0
+    if d == 2:
+        return 0, -1
+    return 0, 1
+
+def tile_from_pixel(px, py):
+    r = int(py // TILE_H)
+    c = int(px // TILE_W)
+    return r, c
+
+def tile_centre(r, c):
+    cx = int(c * TILE_W + TILE_W * 0.5)
+    cy = int(r * TILE_H + TILE_H * 0.5)
+    return cx, cy
+
+def is_wall_tile(v):
+    # your walls are 3..8
+    return 3 <= v <= 8
+
+
+def break_walls_3x3_at_pixel(px, py):
+    """
+    Break walls in a 3x3 square centred on the tile containing (px, py),
+    BUT never break the outer border of the map (keeps maze sealed).
+    """
+    r, c = tile_from_pixel(px, py)
+
+    rows = len(level)
+    cols = len(level[0])
+
+    for rr in range(r - 1, r + 2):
+        for cc in range(c - 1, c + 2):
+
+            # stay in bounds
+            if not (0 <= rr < rows and 0 <= cc < cols):
+                continue
+
+            # protect outer boundary walls
+            if rr == 0 or cc == 0 or rr == rows - 1 or cc == cols - 1:
+                continue
+
+            # optionally protect the ghost gate tile too (9)
+            if level[rr][cc] == 9:
+                continue
+
+            # break only true wall tiles (3..8)
+            if is_wall_tile(level[rr][cc]):
+                level[rr][cc] = 0
+
+
+
+def apply_bomb_effect(bx, by):
+    """
+    Bomb explosion:
+    - breaks walls in 3x3
+    - kills ghosts inside bomb_radius_px (circle check)
+    """
+    global blinky_dead, inky_dead, pinky_dead, clyde_dead
+    global eaten_ghosts, score, DEAD_DIST
+
+    # 1) break walls (3x3)
+    break_walls_3x3_at_pixel(bx, by)
+
+    # IMPORTANT: you changed the map, so rebuild the dead-distance map
+    DEAD_DIST = build_dead_distance_map(level, BOX_TARGET_TILE)
+
+    # 2) kill ghosts inside radius
+    r2 = bomb_radius_px * bomb_radius_px
+
+    ghost_centres = [
+        (blinky_x + 22, blinky_y + 22),
+        (inky_x + 22, inky_y + 22),
+        (pinky_x + 22, pinky_y + 22),
+        (clyde_x + 22, clyde_y + 22),
+    ]
+
+    dead_flags = [blinky_dead, inky_dead, pinky_dead, clyde_dead]
+
+    for i, (gx, gy) in enumerate(ghost_centres):
+        if dead_flags[i]:
+            continue
+
+        dx = gx - bx
+        dy = gy - by
+        if dx * dx + dy * dy <= r2:
+            # kill the ghost
+            if i == 0:
+                blinky_dead = True
+            elif i == 1:
+                inky_dead = True
+            elif i == 2:
+                pinky_dead = True
+            else:
+                clyde_dead = True
+
+            eaten_ghosts[i] = True
+            score += int((2 ** eaten_ghosts.count(True)) * 100 * level_multiplier())  # optional: change score however you want
+            audio.ghost_eaten()
+
+
+def apply_laser_effect(lx, ly, d):
+    """
+    Laser:
+    - kills ghosts in line of fire
+    - ignores walls (laser goes through walls)
+    - does NOT break walls
+    """
+    global blinky_dead, inky_dead, pinky_dead, clyde_dead
+    global eaten_ghosts, score
+
+    ghost_centres = [
+        (blinky_x + 22, blinky_y + 22),
+        (inky_x + 22, inky_y + 22),
+        (pinky_x + 22, pinky_y + 22),
+        (clyde_x + 22, clyde_y + 22),
+    ]
+
+    dead_flags = [blinky_dead, inky_dead, pinky_dead, clyde_dead]
+
+    # tolerance for being "in the same row/column" as the laser
+    tol_x = TILE_W // 2
+    tol_y = TILE_H // 2
+
+    for i, (gx, gy) in enumerate(ghost_centres):
+        if dead_flags[i]:
+            continue
+
+        hit = False
+
+        # d: 0 right, 1 left, 2 up, 3 down
+        if d == 0:  # right
+            hit = (abs(gy - ly) <= tol_y) and (gx >= lx)
+        elif d == 1:  # left
+            hit = (abs(gy - ly) <= tol_y) and (gx <= lx)
+        elif d == 2:  # up
+            hit = (abs(gx - lx) <= tol_x) and (gy <= ly)
+        else:  # down
+            hit = (abs(gx - lx) <= tol_x) and (gy >= ly)
+
+        if hit:
+            if i == 0:
+                blinky_dead = True
+            elif i == 1:
+                inky_dead = True
+            elif i == 2:
+                pinky_dead = True
+            else:
+                clyde_dead = True
+
+            eaten_ghosts[i] = True
+            score += int((2 ** eaten_ghosts.count(True)) * 100 * level_multiplier())  # optional: change score however you want
+            audio.ghost_eaten()
+
+def level_multiplier():
+    # Level 1 -> 1.0x, Level 2 -> 1.5x, Level 3 -> 2x, etc.
+    lvl = current_level + 1
+    return 1.0 + 0.5 * (lvl - 1)
+
+
 
 run = True
 while run: 
@@ -1610,10 +1794,16 @@ while run:
             audio.win()
             win_sfx_played = True
 
+    px = player_x + 23
+    py = player_y + 24
+
     #Wall colision checker
     centre_x = player_x + 23
     centre_y = player_y +24
+    player_circle = pygame.Rect(centre_x - 20, centre_y - 20, 40, 40)
     turns_allowed = check_position(centre_x,centre_y)
+
+    
 
     # Only move/spawn fruits when the game is actually running (after P)
     if (not cover_active) and moving and (not game_over) and (not game_won):
@@ -1621,7 +1811,7 @@ while run:
 
         collected = fruit_mgr.check_collect(player_circle)
         if collected:
-            score += 100
+            score += int(50 * level_multiplier())
             audio.fruit()
 
             # add collected fruit(s) to inventory (keep max 2)
@@ -1687,13 +1877,53 @@ while run:
 
     
             #Wall colision checker
-    centre_x = player_x + 23
-    centre_y = player_y +24
-    turns_allowed = check_position(centre_x,centre_y)
 
-    
-    player_circle = pygame.draw.circle(screen, "black", (centre_x, centre_y), 20, 2)
-    draw_player()
+# ---------- update ability visuals ----------
+# update lasers
+    for shot in laser_shots:
+        shot["frames"] -= 1
+    laser_shots = [s for s in laser_shots if s["frames"] > 0]
+
+    # update bombs
+    for b in bombs:
+        if b["timer"] > 0:
+            b["timer"] -= 1
+            if b["timer"] <= 0:
+                b["explode"] = bomb_explode_frames
+
+               # apply gameplay effect ONCE at explosion moment
+                if not b["did_damage"]:
+                    apply_bomb_effect(b["x"], b["y"])
+                    b["did_damage"] = True
+        else:
+            b["explode"] -= 1
+    bombs = [b for b in bombs if b["timer"] > 0 or b["explode"] > 0]
+
+# laser goes through walls: just draw to screen edge
+    for shot in laser_shots:
+        x1, y1 = shot["x"], shot["y"]
+
+        if shot["dir"] == 0:      # right
+            x2, y2 = WIDTH, y1
+        elif shot["dir"] == 1:    # left
+            x2, y2 = 0, y1
+        elif shot["dir"] == 2:    # up
+            x2, y2 = x1, 0
+        else:                     # down
+            x2, y2 = x1, HEIGHT
+
+        pygame.draw.line(screen, "cyan", (x1, y1), (x2, y2), 6)
+
+    # bombs: draw small marker while counting down, then explosion ring
+    for b in bombs:
+        if b["timer"] > 0:
+            # simple bomb marker + fuse circle
+            pygame.draw.circle(screen, "orange", (b["x"], b["y"]), 10)
+            pygame.draw.circle(screen, "red", (b["x"], b["y"]), 16, 2)
+        else:
+            # explosion (3x3 tiles radius)
+            pygame.draw.circle(screen, "yellow", (b["x"], b["y"]), bomb_radius_px, 6)
+
             
     if cover_active:
         moving= False
@@ -1960,33 +2190,31 @@ while run:
     if powerup and player_circle.colliderect(blinky.rect) and not blinky.dead and not eaten_ghosts[0]:
         blinky_dead = True
         eaten_ghosts[0] = True
-        score += (2 ** eaten_ghosts.count(True)) * 100
+        score += int((2 ** eaten_ghosts.count(True)) * 100 * level_multiplier())
         audio.ghost_eaten()
 
     if powerup and player_circle.colliderect(inky.rect) and not inky.dead and not eaten_ghosts[1]:
         inky_dead = True
         eaten_ghosts[1] = True
-        score += (2 ** eaten_ghosts.count(True)) * 100
+        score += int((2 ** eaten_ghosts.count(True)) * 100 * level_multiplier())
         audio.ghost_eaten()
 
     if powerup and player_circle.colliderect(pinky.rect) and not pinky.dead and not eaten_ghosts[2]:
         pinky_dead = True
         eaten_ghosts[2] = True
-        score += (2 ** eaten_ghosts.count(True)) * 100
+        score += int((2 ** eaten_ghosts.count(True)) * 100 * level_multiplier())
         audio.ghost_eaten()
 
     if powerup and player_circle.colliderect(clyde.rect) and not clyde.dead and not eaten_ghosts[3]:
         clyde_dead = True
         eaten_ghosts[3] = True
-        score += (2 ** eaten_ghosts.count(True)) * 100
+        score += int((2 ** eaten_ghosts.count(True)) * 100 * level_multiplier())
         audio.ghost_eaten()
 
     
     if game_over and (not cover_active) and (not score_submitted) and (not enter_name_active):
         enter_name_active = True
         name_buffer = ""
-
-
 
 
     # Event manager
@@ -2099,16 +2327,37 @@ while run:
 
                     reset_entities_for_level()
             
-            if (not cover_active) and moving and (not game_over) and (not game_won):
-                if event.key == pygame.K_f:
-                    # consume one cherry if available
-                    if "cherry" in fruit_inventory:
-                        fruit_inventory.remove("cherry")
 
-                if event.key == pygame.K_g:
-                    # consume one strawberry if available
-                    if "strawberry" in fruit_inventory:
-                        fruit_inventory.remove("strawberry")
+
+
+            # abilities only during gameplay
+            # Use bomb (cherry) on F
+            if event.key == pygame.K_f and (not cover_active) and moving and (not game_over) and (not game_won):
+                if "cherry" in fruit_inventory:
+                    # remove ONE cherry
+                    fruit_inventory.remove("cherry")
+
+                    # spawn bomb at player position
+                    bombs.append({"x": centre_x, "y": centre_y, "timer": bomb_timer_frames, "explode": 0,"did_damage": False})
+
+                    pygame.draw.circle(screen, "white", (50, 50), 10)
+
+
+            # Use laser (strawberry) on G
+            if event.key == pygame.K_g and (not cover_active) and moving and (not game_over) and (not game_won):
+                if "strawberry" in fruit_inventory:
+                    # remove ONE strawberry
+                    fruit_inventory.remove("strawberry")
+
+                    # spawn laser in the direction pacman is facing
+                    laser_shots.append({
+                        "x": centre_x,
+                        "y": centre_y,
+                        "dir": direction,         # your existing 0/1/2/3
+                        "frames": laser_show_frames
+                    })
+                    apply_laser_effect(px, py, direction)
+
 
 
 

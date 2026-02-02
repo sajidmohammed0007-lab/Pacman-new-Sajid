@@ -52,7 +52,7 @@ class Fruit:
     - avoids instantly reversing direction unless forced
     """
 
-    def __init__(self, kind: str, x: int, y: int, speed: int = 2):
+    def __init__(self, kind: str, x: int, y: int, speed = 1.5):
         # load images  
         global fruit_images
         if fruit_images is None:
@@ -67,7 +67,7 @@ class Fruit:
         self.y = float(y)
 
         # speed in pixels per frame
-        self.speed = int(speed)
+        self.speed = (speed)
 
         # direction codes: 0 right, 1 left, 2 up, 3 down
         self.direction = random.choice([0, 1, 2, 3])
@@ -273,7 +273,7 @@ class FruitManager:
         kind = random.choice([fruit_cherry, fruit_cherry, fruit_strawberry])
 
         fx, fy = pos
-        self.active.append(Fruit(kind, fx, fy, speed=2))
+        self.active.append(Fruit(kind, fx, fy, speed=1.5))
 
     def update(self, level, tile_w, tile_h):
         """Update all fruit movement and handle periodic spawning."""

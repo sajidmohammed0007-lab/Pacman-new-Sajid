@@ -96,9 +96,9 @@ BOX_TARGET_TILE = (16, 15)  # (row, col)
 laser_shots = []   # each item: {"x": int, "y": int, "dir": int, "frames": int}
 bombs = []         # each item: {"x": int, "y": int, "timer": int, "explode": int}
 
-laser_show_frames = 200          # how long the laser line stays visible
-bomb_timer_frames = 1 * 600      # 2 seconds at 60 fps
-bomb_explode_frames = 120        # explosion ring visible for ~0.2s
+laser_show_frames = 20          # how long the laser line stays visible
+bomb_timer_frames = 1 * 60      # 2 seconds at 60 fps
+bomb_explode_frames = 12        # explosion ring visible for ~0.2s
 
 # bomb radius = 3x3 tiles (so radius is 1.5 tiles from centre)
 bomb_radius_px = int(1.5 * max(TILE_W, TILE_H))
@@ -455,7 +455,7 @@ class Ghost:
         else:
             dir_key = {0: "right", 1: "left", 2: "up", 3: "down"}[self.direction]
             screen.blit(ghost_dead_sprites[dir_key], (self.x_pos, self.y_pos))
-        ghost_rect  = pygame.rect.Rect((self.center_x - 18, self.center_y - 18), (36,36))
+        ghost_rect  = pygame.rect.Rect((self.center_x - 18, self.center_y - 18), (28,28))
         return ghost_rect
     def check_collisons(self):
 
@@ -2339,8 +2339,8 @@ while run:
 
                     # spawn bomb at player position
                     bombs.append({"x": centre_x, "y": centre_y, "timer": bomb_timer_frames, "explode": 0,"did_damage": False})
+                    audio.bomb()
 
-                    pygame.draw.circle(screen, "white", (50, 50), 10)
 
 
             # Use laser (strawberry) on G
@@ -2353,10 +2353,11 @@ while run:
                     laser_shots.append({
                         "x": centre_x,
                         "y": centre_y,
-                        "dir": direction,         # your existing 0/1/2/3
+                        "dir": direction,         # 0/1/2/3
                         "frames": laser_show_frames
                     })
                     apply_laser_effect(px, py, direction)
+                    audio.laser()
 
 
 

@@ -21,6 +21,15 @@ class AudioManager:
         self.sfx_menu_select = pygame.mixer.Sound("Assets/audio/menu_select.wav")
         self.sfx_menu_back = pygame.mixer.Sound("Assets/audio/menu_back.wav")
 
+        self.sfx_bomb = pygame.mixer.Sound("Assets/audio/bomb.wav")
+        self.sfx_laser = pygame.mixer.Sound("Assets/audio/laser.wav")
+
+        # Set volumes
+
+        self.sfx_bomb.set_volume(0.85)
+        self.sfx_laser.set_volume(1)
+
+
         self.sfx_menu_move.set_volume(0.4)
         self.sfx_menu_select.set_volume(0.5)
         self.sfx_menu_back.set_volume(0.5)
@@ -63,3 +72,8 @@ class AudioManager:
         self.sfx_menu_back.play()
     def fruit(self):
         self.sfx_fruit.play()
+
+    def bomb(self):
+        self.sfx_bomb.play()
+    def laser(self):
+        self.sfx_laser.play()

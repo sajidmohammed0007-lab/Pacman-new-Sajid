@@ -126,6 +126,22 @@ moving  = False
 ghost_speeds  = [2,2,2,2]
 player_speed = 2
 
+# base speeds set by difficulty 
+difficulty_player_base_speed = 2
+difficulty_ghost_base_speeds = [2, 2, 2, 2]
+
+# per-level scaling (Level 1 = x1.0)
+player_step = 0.05   # +5% per level
+ghost_step  = 0.08   # +8% per level
+
+# each kill adds a stack; stacks reset each new level
+kill_speed = 0.05  # +5% speed per kill (per ghost)
+ghost_kill_stacks = [0, 0, 0, 0]
+
+max_ghost_speed = 8
+frightened_mult = 0.60   # when powerup and ghost is frightened (not eaten yet)
+dead_mult       = 1.60   # when ghost is dead/eyes returning
+
 
 #Used for sprit sheet logic
 sprite_sheet_image = pygame.image.load('Assets/spritesheet.png').convert_alpha()
@@ -260,24 +276,20 @@ def build_dead_distance_map(level, target_tile):
 DEAD_DIST = build_dead_distance_map(level, BOX_TARGET_TILE)
 
 def apply_difficulty(difficulty_index):
-    """
-    Applies difficulty by changing speeds (you can expand this later).
-    Called when leaving the difficulty screen or starting the game.
-    """
-    global player_speed, ghost_speeds
+    global difficulty_player_base_speed, difficulty_ghost_base_speeds
 
-    # Base presets (tweak to taste)
     if difficulty_index == 0:       # EASY
-        player_speed = 2
-        ghost_speeds = [1, 1, 1, 1]
+        difficulty_player_base_speed = 2
+        difficulty_ghost_base_speeds = [1, 1, 1, 1]
     elif difficulty_index == 1:     # NORMAL
-        player_speed = 2
-        ghost_speeds = [2, 2, 2, 2]
-    else:                            # HARD
-        player_speed = 2
-        ghost_speeds = [5,5,5,5]
+        difficulty_player_base_speed = 2
+        difficulty_ghost_base_speeds = [2, 2, 2, 2]
+    else:                           # HARD
+        difficulty_player_base_speed = 2
+        difficulty_ghost_base_speeds = [2.2, 2.2, 2.2, 2.2]
 
-    return ghost_speeds
+    return difficulty_ghost_base_speeds
+
 def draw_cover_overlay():
     """Dark full-screen overlay."""
     overlay = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
@@ -325,6 +337,8 @@ def draw_cover_menu():
             "ARROWS: Move",
             "POWER PELLET: Eat ghosts temporarily",
             "ENTER (in menu): Select",
+            "G key to shoot LASER (if available)",
+            "F key to drop BOMB (if available)",
             "ESC: Back",
         ]
         y = 380
@@ -422,6 +436,19 @@ def handle_menu_key(event):
 
     return False
 
+def level_mult(step):
+    # current_level is 0-based, so Level 1 => multiplier 1.0
+    return 1.0 + step * current_level
+
+def kill_mult(i):
+    return 1.0 + kill_speed * ghost_kill_stacks[i]
+
+def clamp_speed(v, cap):
+    return min(cap, v) if cap is not None else v
+
+def register_ghost_kill(i):
+    # each kill makes THAT ghost faster until next level
+    ghost_kill_stacks[i] += 1
 
 
 # Ghost class
@@ -1585,6 +1612,7 @@ def reset_entities_for_level():
     global blinky_dead, inky_dead, pinky_dead, clyde_dead
     global powerup, power_counter
     global colour
+    global ghost_kill_stacks
 
     powerup = False
     power_counter = 0
@@ -1595,6 +1623,8 @@ def reset_entities_for_level():
     player_x, player_y = 450, 663
     direction = 0
     direction_command = 0
+
+    ghost_kill_stacks = [0, 0, 0, 0]
 
     blinky_x, blinky_y, blinky_direction = 440, 388, 0
     inky_x, inky_y, inky_direction = 440, 388, 2
@@ -1716,6 +1746,7 @@ def apply_bomb_effect(bx, by):
             eaten_ghosts[i] = True
             score += int((2 ** eaten_ghosts.count(True)) * 100 * level_multiplier())  # optional: change score however you want
             audio.ghost_eaten()
+            register_ghost_kill(i)
 
 
 def apply_laser_effect(lx, ly, d):
@@ -1770,6 +1801,8 @@ def apply_laser_effect(lx, ly, d):
             eaten_ghosts[i] = True
             score += int((2 ** eaten_ghosts.count(True)) * 100 * level_multiplier())  # optional: change score however you want
             audio.ghost_eaten()
+            register_ghost_kill(i)
+
 
 def level_multiplier():
     # Level 1 -> 1.0x, Level 2 -> 1.5x, Level 3 -> 2x, etc.
@@ -1828,27 +1861,36 @@ while run:
         fruit_mgr.draw(screen)
 
 
+    # compute player speed from difficulty base + level scaling
+    player_speed = difficulty_player_base_speed * level_mult(player_step)
+    player_speed = max(1, int(round(player_speed)))  # keep integer movement
 
-    if powerup:
-        ghost_speeds = [1, 1, 1, 1]
-    else:
-        ghost_speeds = [2, 2, 2, 2]
-    if eaten_ghosts[0]:
-        ghost_speeds[0] = 2
-    if eaten_ghosts[1]:
-        ghost_speeds[1] = 2
-    if eaten_ghosts[2]:
-        ghost_speeds[2] = 2
-    if eaten_ghosts[3]:
-        ghost_speeds[3] = 2
-    if blinky_dead:
-        ghost_speeds[0] = 4
-    if inky_dead:
-        ghost_speeds[1] = 4
-    if pinky_dead:
-        ghost_speeds[2] = 4
-    if clyde_dead:
-        ghost_speeds[3] = 4
+    #compute ghost speeds from difficulty base + level scaling + kill scaling + state scaling 
+    ghost_speeds = []
+    for i in range(4):
+        base = difficulty_ghost_base_speeds[i] * level_mult(ghost_step)
+        base *= kill_mult(i)
+
+        # frightened slows only if powerup and not dead and not already eaten this powerup
+        if powerup and (not [blinky_dead, inky_dead, pinky_dead, clyde_dead][i]) and (not eaten_ghosts[i]):
+            base *= frightened_mult
+
+        # dead ghosts returning move faster
+        if [blinky_dead, inky_dead, pinky_dead, clyde_dead][i]:
+            base *= dead_mult
+
+        base = clamp_speed(base, max_ghost_speed)
+        ghost_speeds.append(max(1, int(round(base))))
+    print(
+    f"[LEVEL {current_level + 1}] "
+    f"B:{ghost_speeds[0]} "
+    f"I:{ghost_speeds[1]} "
+    f"P:{ghost_speeds[2]} "
+    f"C:{ghost_speeds[3]} "
+    f"| kill_stacks={ghost_kill_stacks}"
+    )
+
+
 
     game_won = True
     for i in range(len(level)):
@@ -2087,6 +2129,8 @@ while run:
             clyde_dead = False
             pinky_dead = False
             moving = False
+            
+
         else:
             game_over = True
             moving = False
@@ -2119,6 +2163,8 @@ while run:
             clyde_dead = False
             pinky_dead = False
             moving = False
+            
+
         else:
             game_over = True
             moving = False
@@ -2151,6 +2197,8 @@ while run:
             clyde_dead = False
             pinky_dead = False
             moving = False
+            
+
         else:
             game_over = True
             moving = False
@@ -2183,6 +2231,8 @@ while run:
             clyde_dead = False
             pinky_dead = False
             moving = False
+            
+
         else:
             game_over = True
             moving = False
@@ -2192,24 +2242,28 @@ while run:
         eaten_ghosts[0] = True
         score += int((2 ** eaten_ghosts.count(True)) * 100 * level_multiplier())
         audio.ghost_eaten()
+        register_ghost_kill(0)
 
     if powerup and player_circle.colliderect(inky.rect) and not inky.dead and not eaten_ghosts[1]:
         inky_dead = True
         eaten_ghosts[1] = True
         score += int((2 ** eaten_ghosts.count(True)) * 100 * level_multiplier())
         audio.ghost_eaten()
+        register_ghost_kill(0)
 
     if powerup and player_circle.colliderect(pinky.rect) and not pinky.dead and not eaten_ghosts[2]:
         pinky_dead = True
         eaten_ghosts[2] = True
         score += int((2 ** eaten_ghosts.count(True)) * 100 * level_multiplier())
         audio.ghost_eaten()
+        register_ghost_kill(0)
 
     if powerup and player_circle.colliderect(clyde.rect) and not clyde.dead and not eaten_ghosts[3]:
         clyde_dead = True
         eaten_ghosts[3] = True
         score += int((2 ** eaten_ghosts.count(True)) * 100 * level_multiplier())
         audio.ghost_eaten()
+        register_ghost_kill(0)
 
     
     if game_over and (not cover_active) and (not score_submitted) and (not enter_name_active):
@@ -2315,8 +2369,8 @@ while run:
                     win_sfx_played = False
                     gameover_sfx_played = False
 
-                    if current_level >= len(LEVELS):
-                        current_level = 0  # loop back (or add final victory screen later)
+                    #if current_level >= len(LEVELS):
+                    #    current_level = 0  # loop back (or add final victory screen later)
 
                     level = copy.deepcopy(LEVELS[current_level])
                     DEAD_DIST = build_dead_distance_map(level, BOX_TARGET_TILE)

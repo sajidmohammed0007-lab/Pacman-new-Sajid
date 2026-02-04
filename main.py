@@ -46,6 +46,7 @@ def get_levels():
     return LEVELS
 LEVELS = get_levels()
 current_level = 0
+level_number = 1
 level_colour = ["blue","green","red"]
 def get_colour(lvl):
     for i in range(len(LEVELS)):
@@ -71,14 +72,15 @@ new_highscore_flag = False
 new_highscore_ticks = 0  # to time the message
 
 
-
-
 cover_active = True           # start with cover menu on
 menu_screen = MENU_MAIN
 menu_index = 0
 
+
+# difficulty settings
 difficulty_names = ["EASY", "NORMAL", "HARD"]
 difficulty_index = 1          # default NORMAL
+difficulty_score_multiplier = 1.0
 
 # leaderboard data
 leaderboard_rows = leaderboard.get_menu_rows()
@@ -97,7 +99,7 @@ laser_shots = []   # each item: {"x": int, "y": int, "dir": int, "frames": int}
 bombs = []         # each item: {"x": int, "y": int, "timer": int, "explode": int}
 
 laser_show_frames = 20          # how long the laser line stays visible
-bomb_timer_frames = 1 * 60      # 2 seconds at 60 fps
+bomb_timer_frames = 0.75 * 60      # 0.75 seconds at 60 fps
 bomb_explode_frames = 12        # explosion ring visible for ~0.2s
 
 # bomb radius = 3x3 tiles (so radius is 1.5 tiles from centre)
@@ -135,7 +137,7 @@ player_step = 0.05   # +5% per level
 ghost_step  = 0.08   # +8% per level
 
 # each kill adds a stack; stacks reset each new level
-kill_speed = 0.05  # +5% speed per kill (per ghost)
+kill_speed = 0.025  # +2.5% speed per kill (per ghost)
 ghost_kill_stacks = [0, 0, 0, 0]
 
 max_ghost_speed = 8
@@ -277,16 +279,20 @@ DEAD_DIST = build_dead_distance_map(level, BOX_TARGET_TILE)
 
 def apply_difficulty(difficulty_index):
     global difficulty_player_base_speed, difficulty_ghost_base_speeds
+    global difficulty_score_multiplier
 
     if difficulty_index == 0:       # EASY
         difficulty_player_base_speed = 2
-        difficulty_ghost_base_speeds = [1, 1, 1, 1]
+        difficulty_ghost_base_speeds = [1.7, 1.7, 1.7, 1.7]
+        difficulty_score_multiplier = 0.85
     elif difficulty_index == 1:     # NORMAL
         difficulty_player_base_speed = 2
-        difficulty_ghost_base_speeds = [2, 2, 2, 2]
+        difficulty_ghost_base_speeds = [1.9, 1.9, 1.9, 1.9]
+        difficulty_score_multiplier = 1.0
     else:                           # HARD
         difficulty_player_base_speed = 2
-        difficulty_ghost_base_speeds = [2.2, 2.2, 2.2, 2.2]
+        difficulty_ghost_base_speeds = [2.1, 2.1, 2.1, 2.1]
+        difficulty_score_multiplier = 1.15
 
     return difficulty_ghost_base_speeds
 
@@ -437,8 +443,9 @@ def handle_menu_key(event):
     return False
 
 def level_mult(step):
-    # current_level is 0-based, so Level 1 => multiplier 1.0
-    return 1.0 + step * current_level
+    # Level 1 -> 1.0, Level 2 -> 1 + step, Level 3 -> 1 + 2*step, ...
+    return 1.0 + step * (level_number - 1)
+
 
 def kill_mult(i):
     return 1.0 + kill_speed * ghost_kill_stacks[i]
@@ -469,7 +476,7 @@ class Ghost:
         self.rect = self.draw() # get rect for collision detection
     def draw(self):
         if (not powerup and not self.dead) or (eaten_ghosts[self.id]and powerup and not self.dead):
-            screen.blit(self.img,(self.x_pos,self.y_pos)) 
+            screen.blit(self.img, (int(self.x_pos), int(self.y_pos))) 
         elif powerup and not self.dead and not eaten_ghosts[self.id]:
             # Flash in the last 3 seconds of frightened mode
             if power_counter >= (powerup_duration_frames - powerup_flash_frames):
@@ -482,14 +489,30 @@ class Ghost:
         else:
             dir_key = {0: "right", 1: "left", 2: "up", 3: "down"}[self.direction]
             screen.blit(ghost_dead_sprites[dir_key], (self.x_pos, self.y_pos))
-        ghost_rect  = pygame.rect.Rect((self.center_x - 18, self.center_y - 18), (28,28))
+        cx = self.x_pos + 22
+        cy = self.y_pos + 22
+        ghost_rect = pygame.Rect(int(cx - 18), int(cy - 18), 28, 28)
+
         return ghost_rect
+    
     def check_collisons(self):
+
+        self.center_x = self.x_pos + 22
+        self.center_y = self.y_pos + 22
+
 
         # Calculate tile sizes based on screen dimensions
         num1 = ((HEIGHT - 50) // 32)   # height of each maze tile
         num2 = (WIDTH // 30)           # width of each maze tile
         num3 = 15                      # small offset used for collision checking
+
+        def tile_val(px, py):
+            r = int(py // num1)
+            c = int(px // num2)
+            # clamp indices so you never go out of bounds
+            r = max(0, min(r, len(level) - 1))
+            c = max(0, min(c, len(level[0]) - 1))
+            return level[r][c]
 
         # Reset allowed turning directions
         # Order: [right, left, up, down]
@@ -499,94 +522,84 @@ class Ghost:
         if 0 < self.center_x // 30 < 29:
 
             # Check if the tile above is a gate (value 9)
-            if level[(self.center_y - num3) // num1][self.center_x // num2] == 9:
+            if tile_val(self.center_x, self.center_y - num3) == 9:
                 self.turns[2] = True
+
 
             # Check if the ghost can move left
             # Movement is allowed if the tile is empty (<3)
             # or if it is a gate (9) and the ghost is dead or in the box
-            if level[self.center_y // num1][(self.center_x - num3) // num2] < 3 \
-                    or (level[self.center_y // num1][(self.center_x - num3) // num2] == 9 and (
-                    self.in_box or self.dead)):
+            left_tile = tile_val(self.center_x - num3, self.center_y)
+            if left_tile < 3 or (left_tile == 9 and (self.in_box or self.dead)):
                 self.turns[1] = True
 
+
             # Check if the ghost can move right
-            if level[self.center_y // num1][(self.center_x + num3) // num2] < 3 \
-                    or (level[self.center_y // num1][(self.center_x + num3) // num2] == 9 and (
-                    self.in_box or self.dead)):
+            right_tile = tile_val(self.center_x + num3, self.center_y)
+            if right_tile < 3 or (right_tile == 9 and (self.in_box or self.dead)):
                 self.turns[0] = True
 
             # Check if the ghost can move down
-            if level[(self.center_y + num3) // num1][self.center_x // num2] < 3 \
-                    or (level[(self.center_y + num3) // num1][self.center_x // num2] == 9 and (
-                    self.in_box or self.dead)):
+            down_tile = tile_val(self.center_x, self.center_y + num3)
+            if down_tile < 3 or (down_tile == 9 and (self.in_box or self.dead)):
                 self.turns[3] = True
 
             # Check if the ghost can move up
-            if level[(self.center_y - num3) // num1][self.center_x // num2] < 3 \
-                    or (level[(self.center_y - num3) // num1][self.center_x // num2] == 9 and (
-                    self.in_box or self.dead)):
+            up_tile = tile_val(self.center_x, self.center_y - num3)
+            if up_tile < 3 or (up_tile == 9 and (self.in_box or self.dead)):
                 self.turns[2] = True
 
-            # Additional alignment checks when moving vertically
-            if self.direction == 2 or self.direction == 3:
-                # Ensure the ghost is centred in the tile horizontally
-                if 12 <= self.center_x % num2 <= 18:
-                    if level[(self.center_y + num3) // num1][self.center_x // num2] < 3 \
-                            or (level[(self.center_y + num3) // num1][self.center_x // num2] == 9 and (
-                            self.in_box or self.dead)):
+            # Extra alignment checks when moving vertically
+            if self.direction in (2, 3):
+                if 12 <= (self.center_x % num2) <= 18:
+                    down_tile = tile_val(self.center_x, self.center_y + num3)
+                    if down_tile < 3 or (down_tile == 9 and (self.in_box or self.dead)):
                         self.turns[3] = True
-                    if level[(self.center_y - num3) // num1][self.center_x // num2] < 3 \
-                            or (level[(self.center_y - num3) // num1][self.center_x // num2] == 9 and (
-                            self.in_box or self.dead)):
+
+                    up_tile = tile_val(self.center_x, self.center_y - num3)
+                    if up_tile < 3 or (up_tile == 9 and (self.in_box or self.dead)):
                         self.turns[2] = True
 
-                # Allow turning left or right when vertically aligned
-                if 12 <= self.center_y % num1 <= 18:
-                    if level[self.center_y // num1][(self.center_x - num2) // num2] < 3 \
-                            or (level[self.center_y // num1][(self.center_x - num2) // num2] == 9 and (
-                            self.in_box or self.dead)):
+                if 12 <= (self.center_y % num1) <= 18:
+                    left_tile = tile_val(self.center_x - num2, self.center_y)
+                    if left_tile < 3 or (left_tile == 9 and (self.in_box or self.dead)):
                         self.turns[1] = True
-                    if level[self.center_y // num1][(self.center_x + num2) // num2] < 3 \
-                            or (level[self.center_y // num1][(self.center_x + num2) // num2] == 9 and (
-                            self.in_box or self.dead)):
+
+                    right_tile = tile_val(self.center_x + num2, self.center_y)
+                    if right_tile < 3 or (right_tile == 9 and (self.in_box or self.dead)):
                         self.turns[0] = True
 
-            # Additional alignment checks when moving horizontally
-            if self.direction == 0 or self.direction == 1:
-                if 12 <= self.center_x % num2 <= 18:
-                    if level[(self.center_y + num3) // num1][self.center_x // num2] < 3 \
-                            or (level[(self.center_y + num3) // num1][self.center_x // num2] == 9 and (
-                            self.in_box or self.dead)):
+            # Extra alignment checks when moving horizontally
+            if self.direction in (0, 1):
+                if 12 <= (self.center_x % num2) <= 18:
+                    down_tile = tile_val(self.center_x, self.center_y + num1)
+                    if down_tile < 3 or (down_tile == 9 and (self.in_box or self.dead)):
                         self.turns[3] = True
-                    if level[(self.center_y - num3) // num1][self.center_x // num2] < 3 \
-                            or (level[(self.center_y - num3) // num1][self.center_x // num2] == 9 and (
-                            self.in_box or self.dead)):
+
+                    up_tile = tile_val(self.center_x, self.center_y - num1)
+                    if up_tile < 3 or (up_tile == 9 and (self.in_box or self.dead)):
                         self.turns[2] = True
 
-                # Allow turning up or down when horizontally aligned
-                if 12 <= self.center_y % num1 <= 18:
-                    if level[self.center_y // num1][(self.center_x - num3) // num2] < 3 \
-                            or (level[self.center_y // num1][(self.center_x - num3) // num2] == 9 and (
-                            self.in_box or self.dead)):
+                if 12 <= (self.center_y % num1) <= 18:
+                    left_tile = tile_val(self.center_x - num3, self.center_y)
+                    if left_tile < 3 or (left_tile == 9 and (self.in_box or self.dead)):
                         self.turns[1] = True
-                    if level[self.center_y // num1][(self.center_x + num3) // num2] < 3 \
-                            or (level[self.center_y // num1][(self.center_x + num3) // num2] == 9 and (
-                            self.in_box or self.dead)):
+
+                    right_tile = tile_val(self.center_x + num3, self.center_y)
+                    if right_tile < 3 or (right_tile == 9 and (self.in_box or self.dead)):
                         self.turns[0] = True
 
-        # Allow wrap-around movement at the maze edges
         else:
+            # Wrap-around tunnel area
             self.turns[0] = True
             self.turns[1] = True
 
-        # Check whether the ghost is inside the ghost box area
+        # Ghost box detection (same as before)
         if 350 < self.x_pos < 550 and 370 < self.y_pos < 470:
             self.in_box = True
         else:
             self.in_box = False
 
-        # Return the allowed turns and the ghost box state
         return self.turns, self.in_box
     #def move_clyde(self):
         # turns list order: [right, left, up, down]
@@ -1358,55 +1371,67 @@ def draw_player():
     else:
         transformed_image = image  
     transformed_image.set_colorkey(pygame.Color("magenta"))
-    screen.blit(transformed_image, (player_x, player_y))
+    screen.blit(transformed_image, (int(player_x), int(player_y)))
+
 
 def check_position(centrex, centrey):
     turns = [False, False, False, False]
     num1 = (HEIGHT - 50) // 32
     num2 = (WIDTH // 30)
     num3 = 15
-    # check collisions based on centre x and centre y of pacman +/- fudge number
+
+    # float-safe tile lookup
+    def tile_at(px, py):
+        r = int(py // num1)
+        c = int(px // num2)
+        # clamp just in case
+        r = max(0, min(r, len(level) - 1))
+        c = max(0, min(c, len(level[0]) - 1))
+        return level[r][c]
+
     if centrex // 30 < 29:
         if direction == 0:
-            if level[centrey // num1][(centrex - num3) // num2] < 3:
+            if tile_at(centrex - num3, centrey) < 3:
                 turns[1] = True
         if direction == 1:
-            if level[centrey // num1][(centrex + num3) // num2] < 3:
+            if tile_at(centrex + num3, centrey) < 3:
                 turns[0] = True
         if direction == 2:
-            if level[(centrey + num3) // num1][centrex // num2] < 3:
+            if tile_at(centrex, centrey + num3) < 3:
                 turns[3] = True
         if direction == 3:
-            if level[(centrey - num3) // num1][centrex // num2] < 3:
+            if tile_at(centrex, centrey - num3) < 3:
                 turns[2] = True
 
         if direction == 2 or direction == 3:
-            if 12 <= centrex % num2 <= 18:
-                if level[(centrey + num3) // num1][centrex // num2] < 3:
+            if 12 <= (centrex % num2) <= 18:
+                if tile_at(centrex, centrey + num3) < 3:
                     turns[3] = True
-                if level[(centrey - num3) // num1][centrex // num2] < 3:
+                if tile_at(centrex, centrey - num3) < 3:
                     turns[2] = True
-            if 12 <= centrey % num1 <= 18:
-                if level[centrey // num1][(centrex - num2) // num2] < 3:
+            if 12 <= (centrey % num1) <= 18:
+                if tile_at(centrex - num2, centrey) < 3:
                     turns[1] = True
-                if level[centrey // num1][(centrex + num2) // num2] < 3:
+                if tile_at(centrex + num2, centrey) < 3:
                     turns[0] = True
+
         if direction == 0 or direction == 1:
-            if 12 <= centrex % num2 <= 18:
-                if level[(centrey + num1) // num1][centrex // num2] < 3:
+            if 12 <= (centrex % num2) <= 18:
+                if tile_at(centrex, centrey + num1) < 3:
                     turns[3] = True
-                if level[(centrey - num1) // num1][centrex // num2] < 3:
+                if tile_at(centrex, centrey - num1) < 3:
                     turns[2] = True
-            if 12 <= centrey % num1 <= 18:
-                if level[centrey // num1][(centrex - num3) // num2] < 3:
+            if 12 <= (centrey % num1) <= 18:
+                if tile_at(centrex - num3, centrey) < 3:
                     turns[1] = True
-                if level[centrey // num1][(centrex + num3) // num2] < 3:
+                if tile_at(centrex + num3, centrey) < 3:
                     turns[0] = True
     else:
         turns[0] = True
         turns[1] = True
 
     return turns
+
 
 def move_player(play_x, play_y):
     # r, l, u, d
@@ -1421,27 +1446,36 @@ def move_player(play_x, play_y):
     return play_x, play_y
 
 
-def check_collisions(scor, power,power_count,eaten_ghosts):
+def check_collisions(scor, power, power_count, eaten_ghosts):
     num1 = (HEIGHT - 50) // 32
-    num2= WIDTH//30
+    num2 = WIDTH // 30
     ate_pellet = False
     ate_power = False
-    # chceks player is within constraints 
-    if 0< player_x < 870:
-        if level[centre_y//num1][centre_x//num2] == 1: #checks position in maze / changes orb value to 0(background)
-            level[centre_y//num1][centre_x//num2] = 0
-            scor += int(10 * level_multiplier())  #increments score counter
+
+    # float-safe indices
+    r = int(centre_y // num1)
+    c = int(centre_x // num2)
+
+    # clamp
+    r = max(0, min(r, len(level) - 1))
+    c = max(0, min(c, len(level[0]) - 1))
+
+    if 0 < player_x < 870:
+        if level[r][c] == 1:
+            level[r][c] = 0
+            scor += int(10 * level_multiplier()* difficulty_score_multiplier)
             ate_pellet = True
-        if level[centre_y//num1][centre_x//num2] == 2:
-            level[centre_y//num1][centre_x//num2] = 0
-            scor += int(50 * level_multiplier())    # Larger score incremetn for 2(big orbs)
+
+        if level[r][c] == 2:
+            level[r][c] = 0
+            scor += int(50 * level_multiplier()*difficulty_score_multiplier)
             power = True
             power_count = 0
-            eaten_ghosts = [False,False,False,False]
+            eaten_ghosts = [False, False, False, False]
             ate_power = True
 
-
     return scor, power, power_count, eaten_ghosts, ate_pellet, ate_power
+
 
 def draw_ui():
     # Score
@@ -1470,9 +1504,9 @@ def draw_ui():
             screen.blit(fruit_icons[kind], (x, y))
         x += 40
 
-    mult = level_multiplier()
-    mult_text = font.render(f'Mult: x{mult:.1f}', True, 'white')
-    screen.blit(mult_text, (400, 920))   # adjust position as you like
+    mult = level_multiplier() * difficulty_score_multiplier
+    mult_text = font.render(f'Mult: x{mult:.2f}', True, 'white')
+    screen.blit(mult_text, (480, 920))   # adjust position as you like
 
 
     # Start game prompt
@@ -1496,7 +1530,7 @@ def draw_ui():
         over_text2 = big_font.render("SPACE BAR TO NEXT LEVEL", True, "white")
         screen.blit(over_text, (300, 275))
         screen.blit(over_text2, (100, 375))
-    lvl_text = font.render(f'Level: {current_level + 1}', True, 'white')
+    lvl_text = font.render(f'Level: {level_number}', True, 'white')
     screen.blit(lvl_text, (250, 920))
 def draw_name_entry_popup():
     # Larger box for readability
@@ -1744,7 +1778,7 @@ def apply_bomb_effect(bx, by):
                 clyde_dead = True
 
             eaten_ghosts[i] = True
-            score += int((2 ** eaten_ghosts.count(True)) * 100 * level_multiplier())  # optional: change score however you want
+            score += int((2 ** eaten_ghosts.count(True)) * 100 * level_multiplier() * difficulty_score_multiplier)  # optional: change score however you want
             audio.ghost_eaten()
             register_ghost_kill(i)
 
@@ -1799,15 +1833,18 @@ def apply_laser_effect(lx, ly, d):
                 clyde_dead = True
 
             eaten_ghosts[i] = True
-            score += int((2 ** eaten_ghosts.count(True)) * 100 * level_multiplier())  # optional: change score however you want
+            score += int((2 ** eaten_ghosts.count(True)) * 100 * level_multiplier() * difficulty_score_multiplier)  # optional: change score however you want
             audio.ghost_eaten()
             register_ghost_kill(i)
 
 
 def level_multiplier():
-    # Level 1 -> 1.0x, Level 2 -> 1.5x, Level 3 -> 2x, etc.
-    lvl = current_level + 1
-    return 1.0 + 0.5 * (lvl - 1)
+    return 1.0 + 0.5 * (level_number - 1)
+
+
+def reset_kill_stacks():
+    global ghost_kill_stacks
+    ghost_kill_stacks = [0, 0, 0, 0]
 
 
 
@@ -1844,7 +1881,7 @@ while run:
 
         collected = fruit_mgr.check_collect(player_circle)
         if collected:
-            score += int(50 * level_multiplier())
+            score += int(50 * level_multiplier() * difficulty_score_multiplier)
             audio.fruit()
 
             # add collected fruit(s) to inventory (keep max 2)
@@ -1852,8 +1889,8 @@ while run:
                 fruit_inventory.append(kind)
 
             # keep only last 2 fruits (like Ms Pac-Man)
-            if len(fruit_inventory) > 2:
-                fruit_inventory = fruit_inventory[-2:]
+            if len(fruit_inventory) > 3:
+                fruit_inventory = fruit_inventory[-3:]
             
 
     # Still draw fruits even when stopped (optional)
@@ -1863,7 +1900,7 @@ while run:
 
     # compute player speed from difficulty base + level scaling
     player_speed = difficulty_player_base_speed * level_mult(player_step)
-    player_speed = max(1, int(round(player_speed)))  # keep integer movement
+    player_speed = max(1.0, player_speed)  # keep integer movement
 
     #compute ghost speeds from difficulty base + level scaling + kill scaling + state scaling 
     ghost_speeds = []
@@ -1880,9 +1917,10 @@ while run:
             base *= dead_mult
 
         base = clamp_speed(base, max_ghost_speed)
-        ghost_speeds.append(max(1, int(round(base))))
+        ghost_speeds.append(max(1.0, base))
+
     print(
-    f"[LEVEL {current_level + 1}] "
+    f"[LEVEL {level_number}] "
     f"B:{ghost_speeds[0]} "
     f"I:{ghost_speeds[1]} "
     f"P:{ghost_speeds[2]} "
@@ -2068,6 +2106,7 @@ while run:
                 (player_circle.colliderect(clyde.rect) and not clyde.dead):
             if lives > 0:
                 lives -= 1
+                reset_kill_stacks()
                 audio.player_die()
                 startup_counter = 0
                 powerup = False
@@ -2106,6 +2145,8 @@ while run:
             powerup = False
             power_counter = 0
             lives -= 1
+            reset_kill_stacks()
+
             startup_counter = 0
             player_x = 450
             player_y = 663
@@ -2140,6 +2181,8 @@ while run:
             powerup = False
             power_counter = 0
             lives -= 1
+            reset_kill_stacks()
+
             startup_counter = 0
             player_x = 450
             player_y = 663
@@ -2174,6 +2217,8 @@ while run:
             powerup = False
             power_counter = 0
             lives -= 1
+            reset_kill_stacks()
+
             startup_counter = 0
             player_x = 450
             player_y = 663
@@ -2208,6 +2253,8 @@ while run:
             powerup = False
             power_counter = 0
             lives -= 1
+            reset_kill_stacks()
+
             startup_counter = 0
             player_x = 450
             player_y = 663
@@ -2240,30 +2287,30 @@ while run:
     if powerup and player_circle.colliderect(blinky.rect) and not blinky.dead and not eaten_ghosts[0]:
         blinky_dead = True
         eaten_ghosts[0] = True
-        score += int((2 ** eaten_ghosts.count(True)) * 100 * level_multiplier())
+        score += int((2 ** eaten_ghosts.count(True)) * 100 * level_multiplier() * difficulty_score_multiplier)
         audio.ghost_eaten()
         register_ghost_kill(0)
 
     if powerup and player_circle.colliderect(inky.rect) and not inky.dead and not eaten_ghosts[1]:
         inky_dead = True
         eaten_ghosts[1] = True
-        score += int((2 ** eaten_ghosts.count(True)) * 100 * level_multiplier())
+        score += int((2 ** eaten_ghosts.count(True)) * 100 * level_multiplier() * difficulty_score_multiplier)
         audio.ghost_eaten()
-        register_ghost_kill(0)
+        register_ghost_kill(1)
 
     if powerup and player_circle.colliderect(pinky.rect) and not pinky.dead and not eaten_ghosts[2]:
         pinky_dead = True
         eaten_ghosts[2] = True
-        score += int((2 ** eaten_ghosts.count(True)) * 100 * level_multiplier())
+        score += int((2 ** eaten_ghosts.count(True)) * 100 * level_multiplier() * difficulty_score_multiplier)
         audio.ghost_eaten()
-        register_ghost_kill(0)
+        register_ghost_kill(2)
 
     if powerup and player_circle.colliderect(clyde.rect) and not clyde.dead and not eaten_ghosts[3]:
         clyde_dead = True
         eaten_ghosts[3] = True
-        score += int((2 ** eaten_ghosts.count(True)) * 100 * level_multiplier())
+        score += int((2 ** eaten_ghosts.count(True)) * 100 * level_multiplier() * difficulty_score_multiplier)
         audio.ghost_eaten()
-        register_ghost_kill(0)
+        register_ghost_kill(3)
 
     
     if game_over and (not cover_active) and (not score_submitted) and (not enter_name_active):
@@ -2284,7 +2331,7 @@ while run:
                 rows, is_new = leaderboard.add_score(
                     name_buffer,
                     score,
-                    current_level + 1
+                    level_number
                 )
                 leaderboard_rows = leaderboard.get_menu_rows()
                 new_highscore_flag = is_new
@@ -2302,6 +2349,7 @@ while run:
                 menu_index = 0
 
                 current_level = 0
+                level_number = 1
                 level = copy.deepcopy(LEVELS[current_level])
                 DEAD_DIST = build_dead_distance_map(level, BOX_TARGET_TILE)
 
@@ -2350,6 +2398,7 @@ while run:
                     menu_index = 0
 
                     current_level = 0
+                    level_number = 1
                     level = copy.deepcopy(LEVELS[current_level])
                     DEAD_DIST = build_dead_distance_map(level, BOX_TARGET_TILE)
 
@@ -2363,14 +2412,15 @@ while run:
                     continue
 
                 elif game_won:
-                    # advance to next level, then show READY screen (not menu)
-                    current_level += 1
+                    # advance logical level (never wraps)
+                    level_number += 1
+
+                    # wrap board index safely
+                    current_level = (current_level + 1) % len(LEVELS)
+
                     colour = get_colour(current_level)
                     win_sfx_played = False
-                    gameover_sfx_played = False
-
-                    #if current_level >= len(LEVELS):
-                    #    current_level = 0  # loop back (or add final victory screen later)
+                    game_over_sfx_played = False
 
                     level = copy.deepcopy(LEVELS[current_level])
                     DEAD_DIST = build_dead_distance_map(level, BOX_TARGET_TILE)
@@ -2380,6 +2430,7 @@ while run:
                     moving = False
 
                     reset_entities_for_level()
+
             
 
 

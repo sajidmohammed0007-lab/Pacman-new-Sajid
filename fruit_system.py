@@ -12,11 +12,11 @@ fruit_strawberry = "strawberry"
 fruit_size = 32
 
 # spawn tuning (in frames)
-# 2 * 60 = 120 frames which is ~2 seconds at 60 fps
-spawn_cooldown_frames = 2 * 60
+# 3 * 60 = 1280 frames which is ~3 seconds at 60 fps
+spawn_cooldown_frames = 3 * 60
 
 # at most this many fruits bouncing around at one time
-max_active_fruits = 2
+max_active_fruits = 3
 
 # color key for transparency (magenta)
 magenta = (255, 0, 255)

@@ -94,7 +94,7 @@ TILE_W = WIDTH // 30
 BOX_TARGET_TILE = (16, 15)  # (row, col) 
 
 #Game variables
-# ---------- ability visuals (iteration: visuals only) ----------
+#ability visuals 
 laser_shots = []   # each item: {"x": int, "y": int, "dir": int, "frames": int}
 bombs = []         # each item: {"x": int, "y": int, "timer": int, "explode": int}
 
@@ -1483,8 +1483,8 @@ def draw_ui():
     screen.blit(score_text, (10, 920))
 
     # Power-up indicator
-    if powerup:
-        pygame.draw.circle(screen, "blue", (140, 930), 15)
+   # if powerup:
+     #   pygame.draw.circle(screen, "blue", (140, 930), 15)
 
     # Lives display
     for i in range(lives):
@@ -1669,7 +1669,7 @@ def reset_entities_for_level():
     blinky_dead = inky_dead = pinky_dead = clyde_dead = False
 
     colour = get_colour(current_level)
-    # IMPORTANT: next level should not auto-run
+    #next level should not auto-run
     moving = False
 
 #counter2 = 0
@@ -1778,7 +1778,7 @@ def apply_bomb_effect(bx, by):
                 clyde_dead = True
 
             eaten_ghosts[i] = True
-            score += int((2 ** eaten_ghosts.count(True)) * 100 * level_multiplier() * difficulty_score_multiplier)  # optional: change score however you want
+            score += int((2 ** eaten_ghosts.count(True)) * 100 * level_multiplier() * difficulty_score_multiplier)  # change score however you want
             audio.ghost_eaten()
             register_ghost_kill(i)
 
@@ -1833,7 +1833,7 @@ def apply_laser_effect(lx, ly, d):
                 clyde_dead = True
 
             eaten_ghosts[i] = True
-            score += int((2 ** eaten_ghosts.count(True)) * 100 * level_multiplier() * difficulty_score_multiplier)  # optional: change score however you want
+            score += int((2 ** eaten_ghosts.count(True)) * 100 * level_multiplier() * difficulty_score_multiplier)  # change score however you want
             audio.ghost_eaten()
             register_ghost_kill(i)
 
@@ -1958,7 +1958,7 @@ while run:
     
             #Wall colision checker
 
-# ---------- update ability visuals ----------
+# update ability visuals
 # update lasers
     for shot in laser_shots:
         shot["frames"] -= 1
